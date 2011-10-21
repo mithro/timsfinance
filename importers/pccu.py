@@ -1,5 +1,14 @@
-from selenium import webdriver
-from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
+#!/usr/bin/python
+#
+# -*- coding: utf-8 -*-
+# vim: set ts=4 sw=4 et sts=4 ai:
+
+"""
+People's Choice Credit Union PCLink downloader.
+
+Formally Savings & Loans Credit Union and Australian Central Credit Union.
+"""
+
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, NoSuchFrameException
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -7,96 +16,76 @@ import os
 import pdb
 import time
 
-# Create a new instance of the Firefox driver
+class pccu(object):
 
-download_dir = "/tmp/webdriver-downloads-%i" % os.getpid()
-os.mkdir(download_dir)
+    def login(self, username, password):
+        # go to the google home page
+        driver.get("https://online.peopleschoicecu.com.au/daib/logon/cu5050/logon.asp")
+        WebDriverWait(driver, 10).until(lambda driver : driver.title.lower().startswith("people's"))
 
-profile = FirefoxProfile()
-profile.set_preference('browser.download.dir', download_dir)
-profile.set_preference('browser.download.folderList', 2)
-profile.set_preference('browser.helperApps.neverAsk.saveToDisk', "text/csv")
-profile.set_preference('browser.helperApps.neverAsk.saveToDisk', "text/comma-separated-values")
-profile.set_preference('browser.helperApps.neverAsk.saveToDisk', "application/octet-stream")
+        username = driver.find_element_by_name("mn")
+        username.send_keys("XXXXXXXX")
 
-driver = webdriver.Firefox(profile)
+        password = driver.find_element_by_name("pwd")
+        password.send_keys("XXXXXXXXXXXXX")
 
-# go to the google home page
-driver.get("https://online.peopleschoicecu.com.au/daib/logon/cu5050/logon.asp")
-WebDriverWait(driver, 10).until(lambda driver : driver.title.lower().startswith("people's"))
+        form = driver.find_element_by_name("loginform")
+        form.submit()
 
-username = driver.find_element_by_name("mn")
-username.send_keys("XXXXXXXX")
+        WebDriverWait(driver, 10).until(lambda driver: driver.title.lower().startswith("welcome"))
+        driver.switch_to_frame("main1")
 
-password = driver.find_element_by_name("pwd")
-password.send_keys("XXXXXXXXXXXXX")
+        continue_btn = driver.find_element_by_name("home")
+        continue_btn.click()
 
-form = driver.find_element_by_name("loginform")
-form.submit()
+        WebDriverWait(driver, 10).until(lambda driver: driver.title.lower().startswith("internet banking"))
 
-WebDriverWait(driver, 10).until(lambda driver: driver.title.lower().startswith("welcome"))
-driver.switch_to_frame("main1")
+    def _get_account_table(self):
+      self.driver.switch_to_default_content()
+      self.driver.switch_to_frame("main1")
+      return self.driver.find_element_by_class_name("list")
+      
+    def _account_table_found(self):
+      try:
+        self._get_account_table(self)
+        return True
+      except (NoSuchElementException, NoSuchFrameException), e:
+        return False
 
-continue_btn = driver.find_element_by_name("home")
-continue_btn.click()
+    def _account_table_rows(self):
+        accounts = []
+        for account_row in account_rows[1:]:
+            accounts.append([y.text.strip() for y in account_row.find_elements_by_xpath('td')])
+        return accounts
 
-WebDriverWait(driver, 10).until(lambda driver: driver.title.lower().startswith("internet banking"))
+    def home(self):
+      WebDriverWait(driver, 10).until(account_table_found)
 
-def get_account_table(driver):
-  driver.switch_to_default_content()
-  driver.switch_to_frame("main1")
-  return driver.find_element_by_class_name("list")
+    def accounts(self):
+        return self._account_table_rows
+
+    def _ready_download(driver):
+        try:
+            driver.find_element_by_tag_name('h1')
+            return True
+        except (NoSuchElementException, NoSuchFrameException), e:
+            return False
+
+    def transactions(self, account_id, start_date, end_date):
+        # FIXME: Use start_date/end_date
+        for account_row in self._account_table_rows():
+            if account_row.find_elements_by_xpath('td')[0].text.strip() == account_id:
+                account_rows.find_element_by_tag_name('a').click()
+                break
+        else:
+            raise AccountNotFound('Could not find account of id %s' % account_id)
+
+        WebDriverWait(driver, 10).until(self._ready_download)
+        download_csv = driver.find_element_by_xpath('//input[@value=3]')
+        download_csv.click()
   
-def account_table_found(driver):
-  try:
-    get_account_table(driver)
-    return True
-  except (NoSuchElementException, NoSuchFrameException), e:
-    return False
+        submit = driver.find_element_by_xpath('//input[@type="submit"]')
+        submit.click()
 
-try:
-  WebDriverWait(driver, 10).until(account_table_found)
-  account_table = get_account_table(driver)
-  account_rows = account_table.find_elements_by_xpath('tbody/tr')
-
-  accounts = []
-  for account_row in account_rows[1:]:
-    accounts.append([y.text.strip() for y in account_row.find_elements_by_xpath('td')])
-  import pprint
-  pprint.pprint(accounts)
-
-
-  account_rows[1].find_element_by_tag_name('a').click()
-
-  def ready_download(driver):
-    try:
-      driver.find_element_by_tag_name('h1')
-      return True
-    except (NoSuchElementException, NoSuchFrameException), e:
-      return False
-
-  WebDriverWait(driver, 10).until(ready_download)
-  download_csv = driver.find_element_by_xpath('//input[@value=3]')
-  download_csv.click()
-  
-  submit = driver.find_element_by_xpath('//input[@type="submit"]')
-  submit.click()
-
-  while len(os.listdir(download_dir)) == 0:
-    time.sleep(1)
-
-  for filename in os.listdir(download_dir):
-    fullpath = os.path.join(download_dir, filename)
-    print fullpath
-    print "-----------------------"
-    print file(fullpath, 'r').read()
-    print "-----------------------"
-    os.unlink(fullpath)
-
-except Exception, e:
-  print e
-  pdb.post_mortem()
-finally:
-  pdb.set_trace()
-
-driver.quit()
+        for handle in self._get_files():
+            print handle.read()

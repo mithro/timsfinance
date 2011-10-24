@@ -84,7 +84,7 @@
     "fields": {
       "site_id": "commbank",
       "username": "XXXXXXXX",
-      "importer": "finance.importers.pccu.PeoplesChoiceCreditUnion",
+      "importer": "finance.importers.commbank.CommBankNetBank",
       "image": "https://www3.netbank.commbank.com.au/static/css/current/fo/images/cba-logo-whitebg.gif?v=16",
       "last_import": "1980-01-01 00:00:00"
     }

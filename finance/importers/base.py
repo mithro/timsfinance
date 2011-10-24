@@ -34,14 +34,14 @@ class Importer(object):
     def _get_files(self):
         # Wait until some files exist and all .part files are gone.
         while True:
-           files = os.listdir(download_dir)
+           files = os.listdir(self.download_dir)
            if len([f for f in files if f.endswith('.part')]) > 0:
               continue
            if len(files) > 0:
               break
 
-        for filename in os.listdir(download_dir):
-            fullpath = os.path.join(download_dir, filename)
+        for filename in os.listdir(self.download_dir):
+            fullpath = os.path.join(self.download_dir, filename)
             yield file(fullpath, "r")
             os.unlink(fullpath)
 

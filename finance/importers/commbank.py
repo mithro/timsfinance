@@ -7,12 +7,16 @@
 Commonwealth Bank of Australia NetBank downloader.
 """
 
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, NoSuchFrameException, ElementNotVisibleException
-from selenium.webdriver.support.ui import WebDriverWait
-
 import os
 import pdb
 import time
+import datetime
+
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, NoSuchFrameException, ElementNotVisibleException
+from selenium.webdriver.support.ui import WebDriverWait
+
+from finance.importers.base import Importer
+from finance import models
 
 
 class CommBankNetBank(Importer):
@@ -21,11 +25,11 @@ class CommBankNetBank(Importer):
         self.driver.get("https://www3.netbank.commbank.com.au/netbank/bankmain")
         WebDriverWait(self.driver, 10).until(lambda driver : driver.title.lower().startswith("netbank - logon"))
 
-        username = self.driver.find_element_by_id("clientNumber")
-        username.send_keys(username)
+        usernamebox = self.driver.find_element_by_id("clientNumber")
+        usernamebox.send_keys(username)
 
-        password = self.driver.find_element_by_id("password")
-        password.send_keys(password)
+        passwordbox = self.driver.find_element_by_id("password")
+        passwordbox.send_keys(password)
 
         form = self.driver.find_element_by_class_name("menubutton")
         form.click()
@@ -33,36 +37,60 @@ class CommBankNetBank(Importer):
         WebDriverWait(self.driver, 10).until(lambda driver: driver.title.lower().startswith("netbank - home"))
         return True
 
-    def _get_account_table(self):
-      return self.driver.find_element_by_id("MyPortfolioGrid1_a")
-      
-    def _account_table_found(self):
+    @classmethod
+    def _get_account_table(cls, driver):
+      return driver.find_element_by_id("MyPortfolioGrid1_a")
+     
+    @classmethod
+    def _account_table_found(cls, driver):
       try:
-        self._get_account_table(self.driver)
+        cls._get_account_table(driver)
         return True
       except (NoSuchElementException, NoSuchFrameException), e:
         return False
 
-    def _account_table_rows(self):
-        account_table = get_account_table(self.driver)
+    @classmethod
+    def _account_table_rows(cls, driver):
+        account_table = cls._get_account_table(driver)
         return account_table.find_elements_by_xpath('tbody/tr')[:-3]
 
     def home(self):
-        WebDriverWait(self.driver, 10).until(account_table_found)
+        WebDriverWait(self.driver, 10).until(self._account_table_found)
         time.sleep(5)
 
-    def accounts(self):
+    def accounts(self, site, dummy=[]):
+        if dummy:
+            account_table_rows = dummy
+        else:
+            account_table_rows = self._account_table_rows(self.driver)
+
+        account_details = []
+        for account_row in account_table_rows:
+            account_details.append([y.text.strip() for y in account_row.find_elements_by_xpath('td')])
+
         accounts = []
-        for account_row in self._account_table_rows():
-            accounts.append([y.text.strip() for y in account_row.find_elements_by_xpath('td')])
+        for (description, _, account_id, balance, funds) in account_details:
+            try:
+                account = models.Account.objects.get(site=site, account_id=account_id)
+            except models.Account.DoesNotExist:
+                account = models.Account(site=site, account_id=account_id)
+                account.imported_last = datetime.datetime.fromtimestamp(0)
+
+            account.description = description
+            account.currency = models.Currency.objects.get(pk="AUD")
+
+            accounts.append(account)
+
         return accounts
 
-    def _get_export_select(self):
-        return self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockExport_ddlExportType_field')
+    @classmethod
+    def _get_export_select(cls, driver):
+        return driver.find_element_by_id('ctl00_BodyPlaceHolder_blockExport_ddlExportType_field')
 
-    def _export_select_found(self):
+    @classmethod
+    def _export_select_found(cls, driver):
         try:
-            export_select = self._get_export_select(self.driver)
+            export_select = cls._get_export_select(driver)
             export_select.find_element_by_xpath('option').click()
             return True
         except (NoSuchElementException, NoSuchFrameException, ElementNotVisibleException), e:

@@ -28,11 +28,11 @@ class PeoplesChoiceCreditUnion(Importer):
         self.driver.get("https://online.peopleschoicecu.com.au/daib/logon/cu5050/logon.asp")
         WebDriverWait(self.driver, 10).until(lambda driver: driver.title.lower().startswith("people's"))
 
-        username = self.driver.find_element_by_name("mn")
-        username.send_keys("XXXXXXXX")
+        usernamebox = self.driver.find_element_by_name("mn")
+        usernamebox.send_keys(username)
 
-        password = self.driver.find_element_by_name("pwd")
-        password.send_keys("XXXXXXXXXXXXX")
+        passwordbox = self.driver.find_element_by_name("pwd")
+        passwordbox.send_keys(password)
 
         form = self.driver.find_element_by_name("loginform")
         form.submit()
@@ -44,6 +44,7 @@ class PeoplesChoiceCreditUnion(Importer):
         continue_btn.click()
 
         WebDriverWait(self.driver, 10).until(lambda driver: driver.title.lower().startswith("internet banking"))
+        return True
 
     @classmethod
     def _get_account_table(cls, driver):
@@ -62,14 +63,10 @@ class PeoplesChoiceCreditUnion(Importer):
     @classmethod
     def _account_table_rows(cls, driver):
         account_table = cls._get_account_table(driver)
-
-        accounts = []
-        for account_row in account_table.find_elements_by_xpath('tbody/tr')[1:]:
-            accounts.append([y.text.strip() for y in account_row.find_elements_by_xpath('td')])
-        return accounts
+        return account_table.find_elements_by_xpath('tbody/tr')[1:]
 
     def home(self):
-      WebDriverWait(self.driver, 10).until(self._account_table_found)
+        WebDriverWait(self.driver, 10).until(self._account_table_found)
 
     def accounts(self, site, dummy=[]):
         if dummy:
@@ -77,19 +74,22 @@ class PeoplesChoiceCreditUnion(Importer):
         else:
             account_table_rows = self._account_table_rows(self.driver)
 
+        account_details = []
+        for account_row in account_table_rows:
+            account_details.append([y.text.strip() for y in account_row.find_elements_by_xpath('td')])
+
         accounts = []
         for (account_id,
              description,
              current_blance, 
              overdraft_limit, 
              uncollected_funds, 
-             available_balance) in account_table_rows:
+             available_balance) in account_details:
 
-            actual_account_id = account_id
             try:
-                account = models.Account.objects.get(site=site, account_id=actual_account_id)
+                account = models.Account.objects.get(site=site, account_id=account_id)
             except models.Account.DoesNotExist:
-                account = models.Account(site=site, account_id=actual_account_id)
+                account = models.Account(site=site, account_id=account_id)
                 account.imported_last = datetime.datetime.fromtimestamp(0)
 
             account.description = description

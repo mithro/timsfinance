@@ -16,7 +16,7 @@ import os
 import pdb
 import time
 
-class pccu(object):
+class PeoplesChoiceCreditUnion(object):
 
     def login(self, username, password):
         # go to the google home page

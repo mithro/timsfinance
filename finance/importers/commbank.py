@@ -15,7 +15,7 @@ import pdb
 import time
 
 
-class Commbank(Importer):
+class CommBankNetBank(Importer):
 
     def login(self, username, password):
         self.driver.get("https://www3.netbank.commbank.com.au/netbank/bankmain")

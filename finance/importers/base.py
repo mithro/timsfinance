@@ -18,7 +18,7 @@ class Importer(object):
     
     def __init__(self):
         self.download_dir = "/tmp/%s-downloads-%i" % (self.__class__.__name__, os.getpid())
-        os.mkdir(download_dir)
+        os.mkdir(self.download_dir)
 
         profile = FirefoxProfile()
         profile.set_preference('browser.download.dir', self.download_dir)
@@ -27,8 +27,8 @@ class Importer(object):
 
         self.driver = webdriver.Firefox(profile)
 
-    def __del__(self):
-        shutil.rmdir(self.download_dir)
+    def __del__(self, rmtree=shutil.rmtree):
+        rmtree(self.download_dir)
         self.driver.quit()
 
     def _get_files(self):

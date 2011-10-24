@@ -1,0 +1,92 @@
+[
+  {
+    "model": "finance.Currency",
+    "pk": 1,
+    "fields": {
+      "currency_id": "AUD",
+      "description": "Australian Dollar"
+    }
+  },
+  {
+    "model": "finance.Currency",
+    "pk": 2,
+    "fields": {
+      "currency_id": "USD",
+      "description": "United States Dollar"
+    }
+  },
+  {
+    "pk": 3,
+    "model": "finance.Category",
+    "fields": {
+      "category_id": "medical",
+      "description": "Medical Expenses"
+    }
+  },
+  {
+    "pk": 4,
+    "model": "finance.Category",
+    "fields": {
+      "category_id": "medical/cpap",
+      "description": "CPAP Machine Rental",
+      "parent": "medical"
+    }
+  },
+  {
+    "pk": 5,
+    "model": "finance.Category",
+    "fields": {
+      "category_id": "bank",
+      "description": "Banking"
+    }
+  },
+  {
+    "pk": 6,
+    "model": "finance.Category",
+    "fields": {
+      "category_id": "bank/fees",
+      "description": "Bank Fees",
+      "parent": "bank"
+    }
+  },
+  {
+    "pk": 7,
+    "model": "finance.Category",
+    "fields": {
+      "category_id": "bank/interest-positive",
+      "description": "Bank Interest Earned",
+      "parent": "bank"
+    }
+  },
+  {
+    "pk": 8,
+    "model": "finance.Category",
+    "fields": {
+      "category_id": "bank/interest-negative",
+      "description": "Bank Interest Taken",
+      "parent": "bank"
+    }
+  },
+  {
+    "pk": 9,
+    "model": "finance.Site",
+    "fields": {
+      "site_id": "pccu",
+      "username": "XXXXXXXX",
+      "importer": "finance.importers.pccu.PeoplesChoiceCreditUnion",
+      "image": "https://online.peopleschoicecu.com.au/daib/images/logon/cu5050/header-logo.gif",
+      "last_import": "1980-01-01 00:00:00"
+    }
+  },
+  {
+    "pk": 10,
+    "model": "finance.Site",
+    "fields": {
+      "site_id": "commbank",
+      "username": "XXXXXXXX",
+      "importer": "finance.importers.pccu.PeoplesChoiceCreditUnion",
+      "image": "https://www3.netbank.commbank.com.au/static/css/current/fo/images/cba-logo-whitebg.gif?v=16",
+      "last_import": "1980-01-01 00:00:00"
+    }
+  }
+]

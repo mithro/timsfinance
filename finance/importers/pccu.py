@@ -9,6 +9,7 @@ People's Choice Credit Union PCLink downloader.
 Formally Savings & Loans Credit Union and Australian Central Credit Union.
 """
 
+import csv
 import os
 import pdb
 import time
@@ -107,21 +108,90 @@ class PeoplesChoiceCreditUnion(Importer):
         except (NoSuchElementException, NoSuchFrameException), e:
             return False
 
-    def transactions(self, site, account, start_date, end_date):
-        # FIXME: Use start_date/end_date
-        for account_row in self._account_table_rows():
+    def transactions(self, account, start_date, end_date):
+        for account_row in self._account_table_rows(self.driver):
             if account_row.find_elements_by_xpath('td')[0].text.strip() == account.account_id:
-                account_rows.find_element_by_tag_name('a').click()
+                account_row.find_element_by_tag_name('a').click()
                 break
         else:
             raise AccountNotFound('Could not find account of id %s' % account_id)
 
         WebDriverWait(self.driver, 10).until(self._ready_download)
-        download_csv = self.driver.find_element_by_xpath('//input[@value=3]')
+
+        select_date_range = self.driver.find_element_by_name('DateRange').find_element_by_xpath('option[@value=6]')
+        select_date_range.click()
+
+        download_csv = self.driver.find_element_by_xpath('//input[@name="OutputRdo1"]').find_element_by_xpath('//input[@value=3]')
         download_csv.click()
-  
+ 
+        start_date_field = self.driver.find_element_by_name('BeginDate')
+        start_date_field.clear()
+        start_date_field.send_keys(start_date.strftime('%d/%m/%Y'))
+        end_date_field = self.driver.find_element_by_name('EndDate')
+        end_date_field.clear()
+        end_date_field.send_keys(end_date.strftime('%d/%m/%Y'))
+
         submit = self.driver.find_element_by_xpath('//input[@type="submit"]')
         submit.click()
 
         for handle in self._get_files():
-            print handle.read()
+            return self.parse_file(account, handle)
+
+    def parse_file(self, account, handle):
+        transactions = []
+
+        #Effective Date,Entered Date,Transaction Description,Amount,Balance
+        #,15/10/2011,PAYMENT ,4500.00,236524.94
+        for row in csv.DictReader(handle):
+            trans_id = "%s|%s|%s|%s|%s" % (row['Effective Date'],row['Entered Date'],row['Transaction Description'],row['Amount'],row['Balance'])
+
+            try:
+                trans = models.Transaction.objects.get(account=account, trans_id=trans_id)
+            except models.Transaction.DoesNotExist:
+                trans = models.Transaction(account=account, trans_id=trans_id)
+
+            trans.imported_entered_date = datetime.datetime.strptime(row['Entered Date'], '%d/%m/%Y')
+            if row['Effective Date']:
+                trans.imported_effective_date = datetime.datetime.strptime(row['Effective Date'], '%d/%m/%Y')
+
+            trans.imported_description = row['Transaction Description'].strip()
+            if '(OS)' in row['Transaction Description']:
+                trans.imported_location = "Outside Australia"
+            else:
+                trans.imported_location = "Australia"
+
+            # Remove the decimal so we get back to cents
+            amount = int(row['Amount'].replace('.', ''))
+            trans.imported_amount = int(amount)
+
+            running = int(row['Balance'].replace('.', ''))
+            trans.imported_running = running
+
+            transactions.append(trans)
+
+
+        # At the moment it's hardcoded to the following;
+        # FEE TO BE CAP'D
+        # PRIN CR ADJUST
+        for trans in transactions:
+            if trans.imported_description in ("FEE TO BE CAP'D", "PRIN CR ADJUST"):
+                amount = trans.imported_amount
+                trans.imported_amount = 0
+                trans.imported_description += " -- $%i.%s" % (amount/100, str(amount)[-2:])
+
+        # For loans an a couple of other weird transactions, the amount is set
+        # to something but the Balance doesn't change. We go back over the
+        # transactions and root out these.
+        #
+        # For this we need the last transcation in the account..
+        #last_trans = account.transaction_set.all()
+        #last_trans.order_by('imported_entered_date')
+
+        #temp_transactions = transactions+[last_trans[0]]
+        #while len(temp_transactions) > 1:
+        #    trans = temp_transactions.pop(0)
+        #
+        #    difference = temp_transactions[0].imported_running - trans.imported_running 
+        #    print trans.imported_description, difference, trans.imported_amount
+
+        return transactions

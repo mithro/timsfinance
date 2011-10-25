@@ -126,5 +126,10 @@ class Transaction(models.Model):
 
     class Meta:
         unique_together = (("account", "trans_id"))
-        get_latest_by = "imported_effective_date"
-        ordering = ["-imported_effective_date"]
+        get_latest_by = "imported_entered_date"
+        ordering = ["-imported_entered_date", "-imported_effective_date"]
+
+class TransactionAdmin(admin.ModelAdmin):
+    list_display = ('account', 'trans_id', 'imported_effective_date', 'imported_entered_date', 'imported_description', 'imported_amount', 'imported_original_currency', 'imported_original_amount')
+    list_filter = ('account',)
+    search_fields = ('imported_description', 'override_description')

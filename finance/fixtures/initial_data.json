@@ -32,6 +32,14 @@
     }
   },
   {
+    "model": "finance.Currency",
+    "pk": "EUR",
+    "fields": {
+      "currency_id": "EUR",
+      "description": "Euro"
+    }
+  },
+  {
     "pk": 3,
     "model": "finance.Category",
     "fields": {

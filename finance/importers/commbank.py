@@ -24,6 +24,7 @@ CURRENCY_MAP = {
     'CANADIAN DOLLAR': 'CAD',
     'US DOLLAR': 'USD',
     'POUND STERLING': 'GBP',
+    'EURO NATL CURR UNI': 'EUR',
     }
 
 
@@ -63,6 +64,7 @@ class CommBankNetBank(Importer):
         return account_table.find_elements_by_xpath('tbody/tr')[:-3]
 
     def home(self):
+        [x for x in self.driver.find_elements_by_tag_name('a') if x.get_attribute('href') and "Home.aspx" in x.get_attribute('href')][0].click()
         WebDriverWait(self.driver, 10).until(self._account_table_found)
         time.sleep(5)
 
@@ -105,59 +107,84 @@ class CommBankNetBank(Importer):
             return False
 
     def transactions(self, account, start_date, end_date):
-        for account_row in self._account_table_rows(self.driver):
-            account_name = account_row.find_elements_by_xpath('td')[2].text.strip()
-            if account_name == account.account_id:
-                break
-        else:
-            raise AccountNotFound('Could not find account of id %s' % account_id)
+        # As commbank doesn't have a running total in their CSV output, we have
+        # to use the account balance displayed. This means that we must always
+        # import from the latest transaction backwards.
+        #assert end_date.date() == datetime.datetime.now().date()
 
-        account_row.find_element_by_tag_name('a').click()
+        while True:
+            try:
+                for account_row in self._account_table_rows(self.driver):
+                    account_name = account_row.find_elements_by_xpath('td')[2].text.strip()
+                    if account_name == account.account_id:
+                        break
+                else:
+                    raise AccountNotFound('Could not find account of id %s' % account_id)
 
-        WebDriverWait(self.driver, 10).until(lambda driver: driver.title.lower().startswith("netbank - trans"))
-        time.sleep(5)
+                account_row.find_element_by_tag_name('a').click()
 
-        show_form = self.driver.find_element_by_id('lnkShowHideSearch')
-        show_form.click()
-        time.sleep(5)
+                WebDriverWait(self.driver, 10).until(lambda driver: driver.title.lower().startswith("netbank - trans"))
+                time.sleep(5)
 
-        date_range = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_rbtnChooseDates_field')
-        date_range.click()
-        time.sleep(5)
+                # Pull out the current account balance
+                balance = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_gridViewAccount_r00_labelAccountBalance_field').text.strip()
+                if balance.endswith('DR'):
+                    balance = "-" + balance
+                elif balance.endswith('CR'):
+                    balance = "+" + balance
+                else:
+                    assert False
 
-        from_date = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_caltbFrom_field')
-        for key in start_date.strftime('%d/%m/%Y'):
-            from_date.send_keys(key)
-        time.sleep(5)
-        to_date = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_caltbTo_field')
-        for key in end_date.strftime('%d/%m/%Y'):
-            to_date.send_keys(key)
-        time.sleep(5)
+                starting_balance = int(re.sub('[^\-+0-9]', '', balance))
+                print "starting_balance:", starting_balance
 
-        submit_button = self.driver.find_element_by_xpath('//input[@value="SEARCH"]')
-        submit_button.click()
+                show_form = self.driver.find_element_by_id('lnkShowHideSearch')
+                show_form.click()
+                time.sleep(5)
 
-        WebDriverWait(self.driver, 10).until(self._export_select_found)
-        time.sleep(5)
+                date_range = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_rbtnChooseDates_field')
+                date_range.click()
+                time.sleep(5)
 
-        export_select = self._get_export_select(self.driver)
-        export_csv = export_select.find_element_by_xpath('option[@value="CSV"]')
-        export_csv.click()
+                from_date = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_caltbFrom_field')
+                for key in start_date.strftime('%d/%m/%Y'):
+                    from_date.send_keys(key)
+                time.sleep(5)
+                to_date = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_caltbTo_field')
+                for key in end_date.strftime('%d/%m/%Y'):
+                    to_date.send_keys(key)
+                time.sleep(5)
 
-        export_button = self.driver.find_element_by_xpath('//input[@value="EXPORT TRANSACTIONS"]')
-        export_button.click()
+                submit_button = self.driver.find_element_by_xpath('//input[@value="SEARCH"]')
+                submit_button.click()
 
-        time.sleep(5)
+                WebDriverWait(self.driver, 10).until(self._export_select_found)
+                time.sleep(5)
 
-        for handle in self._get_files():
-            return self.parse_file(account, handle)
+                export_select = self._get_export_select(self.driver)
+                export_csv = export_select.find_element_by_xpath('option[@value="CSV"]')
+                export_csv.click()
 
-    def parse_file(self, account, handle):
+                export_button = self.driver.find_element_by_xpath('//input[@value="EXPORT TRANSACTIONS"]')
+                export_button.click()
+
+                time.sleep(5)
+
+                for handle in self._get_files():
+                    return self.parse_file(account, handle, starting_balance=starting_balance)
+
+            except TimeoutException:
+                self.home()
+                continue
+
+
+    def parse_file(self, account, handle, starting_balance):
         transactions = []
         #                     0                        | location   ##1011               
         # 18/10/2011,"+9.23","PREMIUM TOURS LTD        LONDON  N1 0 ##1011           6.00 POUND STERLING",""
+        current_balance = starting_balance
         for entered_date, amount, mangled_desc, _ in csv.reader(handle):
-            trans_id = "%s|%s|%s" % (entered_date, amount, mangled_desc)
+            trans_id = "%s|%s|%s|%s" % (entered_date, amount, mangled_desc, current_balance)
 
             try:
                 trans = models.Transaction.objects.get(account=account, trans_id=trans_id)
@@ -170,6 +197,9 @@ class CommBankNetBank(Importer):
             # Remove the decimal so we get back to cents
             amount = amount.replace('.', '')
             trans.imported_amount = int(amount)
+
+            trans.imported_running = current_balance
+            current_balance -= trans.imported_amount
 
             # Commbank reports extra info in the description about any currency
             # conversion that happened. Lets try and extract that info.
@@ -187,7 +217,7 @@ class CommBankNetBank(Importer):
                         amount, currency_type = stuff.groups()
                         amount = amount.replace('.', '')
                         
-                        trans.imported_original_amount = int(amount)
+                        trans.imported_original_amount = int(amount)*(trans.imported_amount/abs(trans.imported_amount))
                         trans.imported_original_currency = models.Currency.objects.get(pk=CURRENCY_MAP[currency_type])
                 else:
                     trans.imported_location = extra_info + ', Australia'

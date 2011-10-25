@@ -15,8 +15,10 @@ class Command(BaseCommand):
     help = 'Imports the transactions into an accounts.'
 
     def handle(self, *args, **options):
-        start_date = datetime.datetime.now() - datetime.timedelta(days=30)
         end_date = datetime.datetime.now() - datetime.timedelta(days=1)
+        start_date = end_date - datetime.timedelta(days=30)
+
+        print start_date, end_date
 
         for account_id in args:
             try:
@@ -36,7 +38,13 @@ class Command(BaseCommand):
             importer.login(account.site.username, password)
             importer.home()
 
-            transactions = importer.transactions(account, start_date, end_date)
-            for transaction in transactions:
-                transaction.save()
+            try:
+                transactions = importer.transactions(account, start_date, end_date)
+                for transaction in transactions:
+                    transaction.save()
+            except Exception, e:
+                print e
+                import pdb
+                pdb.post_mortem()
+                raise
 

@@ -1,4 +1,6 @@
 # Django settings for timsfinance project.
+import locale
+locale.setlocale(locale.LC_ALL, '')
 
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG

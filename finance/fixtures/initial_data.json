@@ -4,7 +4,8 @@
     "pk": "AUD",
     "fields": {
       "currency_id": "AUD",
-      "description": "Australian Dollar"
+      "description": "Australian Dollar",
+      "symbol": "$"
     }
   },
   {
@@ -12,7 +13,8 @@
     "pk": "USD",
     "fields": {
       "currency_id": "USD",
-      "description": "United States Dollar"
+      "description": "United States Dollar",
+      "symbol": "$"
     }
   },
   {
@@ -20,7 +22,8 @@
     "pk": "CAD",
     "fields": {
       "currency_id": "CAD",
-      "description": "United States Dollar"
+      "description": "United States Dollar",
+      "symbol": "$"
     }
   },
   {
@@ -28,7 +31,8 @@
     "pk": "GBP",
     "fields": {
       "currency_id": "GBP",
-      "description": "Great British Pound"
+      "description": "Great British Pound",
+      "symbol": "£"
     }
   },
   {
@@ -36,7 +40,8 @@
     "pk": "EUR",
     "fields": {
       "currency_id": "EUR",
-      "description": "Euro"
+      "description": "Euro",
+      "symbol": "€"
     }
   },
   {

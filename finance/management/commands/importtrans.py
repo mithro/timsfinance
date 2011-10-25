@@ -15,7 +15,7 @@ class Command(BaseCommand):
     help = 'Imports the transactions into an accounts.'
 
     def handle(self, *args, **options):
-        start_date = datetime.datetime.now() - datetime.timedelta(days=7)
+        start_date = datetime.datetime.now() - datetime.timedelta(days=30)
         end_date = datetime.datetime.now() - datetime.timedelta(days=1)
 
         for account_id in args:
@@ -24,24 +24,19 @@ class Command(BaseCommand):
             except models.Account.DoesNotExist:
                 raise CommandError('Account "%s" does not exist' % account_id)
 
-            #if not account.site.password:
-            #    password = getpass.getpass('Password for %s:' % account.site.site_id)
-            #else:
-            #    password = account.site.password
+            if not account.site.password:
+                password = getpass.getpass('Password for %s:' % account.site.site_id)
+            else:
+                password = account.site.password
 
             module, klass = account.site.importer.rsplit('.', 1)
             exec("from %s import %s as importer_class" % (module, klass))
             importer = importer_class()
 
-            importer.parse_file(account, file("/home/tansell/Downloads/CSVData (2).csv"))
-
-            return 
-
             importer.login(account.site.username, password)
             importer.home()
 
-
-            transactions = importer.transactions(account.account_id, start_date, end_date)
+            transactions = importer.transactions(account, start_date, end_date)
             for transaction in transactions:
-                print transaction
-                account.save()
+                transaction.save()
+

@@ -113,23 +113,32 @@ class CommBankNetBank(Importer):
             raise AccountNotFound('Could not find account of id %s' % account_id)
 
         account_row.find_element_by_tag_name('a').click()
+
         WebDriverWait(self.driver, 10).until(lambda driver: driver.title.lower().startswith("netbank - trans"))
+        time.sleep(5)
 
         show_form = self.driver.find_element_by_id('lnkShowHideSearch')
         show_form.click()
+        time.sleep(5)
 
         date_range = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_rbtnChooseDates_field')
         date_range.click()
+        time.sleep(5)
 
         from_date = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_caltbFrom_field')
-        from_date.send_keys(start_date.strftime('%d/%m/%Y'))
+        for key in start_date.strftime('%d/%m/%Y'):
+            from_date.send_keys(key)
+        time.sleep(5)
         to_date = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_caltbTo_field')
-        to_date.send_keys(start_date.strftime('%d/%m/%Y'))
+        for key in end_date.strftime('%d/%m/%Y'):
+            to_date.send_keys(key)
+        time.sleep(5)
 
         submit_button = self.driver.find_element_by_xpath('//input[@value="SEARCH"]')
         submit_button.click()
 
         WebDriverWait(self.driver, 10).until(self._export_select_found)
+        time.sleep(5)
 
         export_select = self._get_export_select(self.driver)
         export_csv = export_select.find_element_by_xpath('option[@value="CSV"]')
@@ -138,12 +147,13 @@ class CommBankNetBank(Importer):
         export_button = self.driver.find_element_by_xpath('//input[@value="EXPORT TRANSACTIONS"]')
         export_button.click()
 
-        time.sleep(10)
+        time.sleep(5)
 
         for handle in self._get_files():
-            self.parse_file(account, handle)
+            return self.parse_file(account, handle)
 
     def parse_file(self, account, handle):
+        transactions = []
         #                     0                        | location   ##1011               
         # 18/10/2011,"+9.23","PREMIUM TOURS LTD        LONDON  N1 0 ##1011           6.00 POUND STERLING",""
         for entered_date, amount, mangled_desc, _ in csv.reader(handle):
@@ -163,22 +173,26 @@ class CommBankNetBank(Importer):
 
             # Commbank reports extra info in the description about any currency
             # conversion that happened. Lets try and extract that info.
-            extra_info = mangled_desc[25:]
+            extra_info = mangled_desc[25:].strip()
             if len(extra_info) > 0:
-                location, currency_info = [x.strip() for x in extra_info.split('##1011')]
+                if '##1011' in extra_info:
+                    location, currency_info = [x.strip() for x in extra_info.split('##1011')]
 
-                # Get the location info
-                trans.imported_location = location.strip()
+                    # Get the location info
+                    trans.imported_location = location.strip()
 
-                # Extract the currency info
-                stuff = re.match("([0-9]*.[0-9][0-9]) (.*)", currency_info)
-                if stuff:
-                    amount, currency_type = stuff.groups()
-                    amount = amount.replace('.', '')
-                    
-                    trans.imported_original_amount = int(amount)
-                    trans.imported_original_currency = models.Currency.objects.get(pk=CURRENCY_MAP[currency_type])
+                    # Extract the currency info
+                    stuff = re.match("([0-9]*.[0-9][0-9]) (.*)", currency_info)
+                    if stuff:
+                        amount, currency_type = stuff.groups()
+                        amount = amount.replace('.', '')
+                        
+                        trans.imported_original_amount = int(amount)
+                        trans.imported_original_currency = models.Currency.objects.get(pk=CURRENCY_MAP[currency_type])
+                else:
+                    trans.imported_location = extra_info + ', Australia'
             else:
                 trans.imported_location = 'Australia'
-            
-            print trans
+           
+            transactions.append(trans)
+        return transactions

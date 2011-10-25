@@ -112,13 +112,13 @@ class Transaction(models.Model):
     override_reference = models.ManyToManyField('self')
 
     # These are the values which a user can enter/override
-    override_description = models.CharField(max_length=200)
+    override_description = models.CharField(max_length=200, null=True)
     
     # Suggested category
     suggested_categories = models.ManyToManyField('Category', related_name='transaction_suggested_set')
 
     # Primary category
-    primary_category = models.ForeignKey('Category', related_name='transaction_primary_set')
+    primary_category = models.ForeignKey('Category', related_name='transaction_primary_set', null=True)
 
     # Tagging...
     def __unicode__(self):

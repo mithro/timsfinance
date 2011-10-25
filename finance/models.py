@@ -96,15 +96,16 @@ class Transaction(models.Model):
     trans_id = models.CharField(max_length=200)
 
     # These are the values imported from the site
-    imported_effective_date = models.DateTimeField('effective date')
+    imported_effective_date = models.DateTimeField('effective date', null=True)
     imported_entered_date = models.DateTimeField('entered date')
     imported_description = models.CharField(max_length=200)
+    imported_location = models.CharField(max_length=200)
     imported_amount = models.IntegerField()
-    imported_running = models.IntegerField()
+    imported_running = models.IntegerField(null=True)
 
     # Sometimes there was a currency conversion done
-    imported_original_currency = models.ForeignKey('Currency')
-    imported_original_amount = models.IntegerField()
+    imported_original_currency = models.ForeignKey('Currency', null=True)
+    imported_original_amount = models.IntegerField(null=True)
 
     # Sometimes this transaction references another transaction
     imported_reference = models.ManyToManyField('self')
@@ -120,7 +121,9 @@ class Transaction(models.Model):
     primary_category = models.ForeignKey('Category', related_name='transaction_primary_set')
 
     # Tagging...
-    
+    def __unicode__(self):
+        return self.trans_id
+
     class Meta:
         unique_together = (("account", "trans_id"))
         get_latest_by = "imported_effective_date"

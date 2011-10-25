@@ -7,10 +7,12 @@
 Commonwealth Bank of Australia NetBank downloader.
 """
 
+import csv
 import os
 import pdb
 import time
 import datetime
+import re
 
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, NoSuchFrameException, ElementNotVisibleException
 from selenium.webdriver.support.ui import WebDriverWait
@@ -18,20 +20,26 @@ from selenium.webdriver.support.ui import WebDriverWait
 from finance.importers.base import Importer
 from finance import models
 
+CURRENCY_MAP = {
+    'CANADIAN DOLLAR': 'CAD',
+    'US DOLLAR': 'USD',
+    'POUND STERLING': 'GBP',
+    }
+
 
 class CommBankNetBank(Importer):
 
     def login(self, username, password):
-        self.driver.get("https://www3.netbank.commbank.com.au/netbank/bankmain")
+        self.driver.get("https://www.my.commbank.com.au/netbank/Logon/Logon.aspx")
         WebDriverWait(self.driver, 10).until(lambda driver : driver.title.lower().startswith("netbank - logon"))
 
-        usernamebox = self.driver.find_element_by_id("clientNumber")
+        usernamebox = self.driver.find_element_by_id("txtMyClientNumber_field")
         usernamebox.send_keys(username)
 
-        passwordbox = self.driver.find_element_by_id("password")
+        passwordbox = self.driver.find_element_by_id("txtMyPassword_field")
         passwordbox.send_keys(password)
 
-        form = self.driver.find_element_by_class_name("menubutton")
+        form = self.driver.find_element_by_id("btnLogon_field")
         form.click()
 
         WebDriverWait(self.driver, 10).until(lambda driver: driver.title.lower().startswith("netbank - home"))
@@ -96,10 +104,10 @@ class CommBankNetBank(Importer):
         except (NoSuchElementException, NoSuchFrameException, ElementNotVisibleException), e:
             return False
 
-    def transactions(self, account_id, start_date, end_date):
-        for account_row in self._account_table_rows():
-            account_name = account_row.find_elements_by_xpath('td')[0].text.strip()
-            if account_name == account_id:
+    def transactions(self, account, start_date, end_date):
+        for account_row in self._account_table_rows(self.driver):
+            account_name = account_row.find_elements_by_xpath('td')[2].text.strip()
+            if account_name == account.account_id:
                 break
         else:
             raise AccountNotFound('Could not find account of id %s' % account_id)
@@ -114,16 +122,16 @@ class CommBankNetBank(Importer):
         date_range.click()
 
         from_date = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_caltbFrom_field')
-        from_date.send_keys(start_date.strftime('%d/%m/%y'))
+        from_date.send_keys(start_date.strftime('%d/%m/%Y'))
         to_date = self.driver.find_element_by_id('ctl00_BodyPlaceHolder_blockDates_caltbTo_field')
-        to_date.send_keys(start_date.strftime('%d/%m/%y'))
+        to_date.send_keys(start_date.strftime('%d/%m/%Y'))
 
         submit_button = self.driver.find_element_by_xpath('//input[@value="SEARCH"]')
         submit_button.click()
 
         WebDriverWait(self.driver, 10).until(self._export_select_found)
 
-        export_select = self._get_export_select()
+        export_select = self._get_export_select(self.driver)
         export_csv = export_select.find_element_by_xpath('option[@value="CSV"]')
         export_csv.click()
 
@@ -133,4 +141,44 @@ class CommBankNetBank(Importer):
         time.sleep(10)
 
         for handle in self._get_files():
-            print handle.read()
+            self.parse_file(account, handle)
+
+    def parse_file(self, account, handle):
+        #                     0                        | location   ##1011               
+        # 18/10/2011,"+9.23","PREMIUM TOURS LTD        LONDON  N1 0 ##1011           6.00 POUND STERLING",""
+        for entered_date, amount, mangled_desc, _ in csv.reader(handle):
+            trans_id = "%s|%s|%s" % (entered_date, amount, mangled_desc)
+
+            try:
+                trans = models.Transaction.objects.get(account=account, trans_id=trans_id)
+            except models.Transaction.DoesNotExist:
+                trans = models.Transaction(account=account, trans_id=trans_id)
+
+            trans.imported_entered_date = datetime.datetime.strptime(entered_date, '%d/%m/%Y')
+            trans.imported_description = mangled_desc[:25].strip()
+
+            # Remove the decimal so we get back to cents
+            amount = amount.replace('.', '')
+            trans.imported_amount = int(amount)
+
+            # Commbank reports extra info in the description about any currency
+            # conversion that happened. Lets try and extract that info.
+            extra_info = mangled_desc[25:]
+            if len(extra_info) > 0:
+                location, currency_info = [x.strip() for x in extra_info.split('##1011')]
+
+                # Get the location info
+                trans.imported_location = location.strip()
+
+                # Extract the currency info
+                stuff = re.match("([0-9]*.[0-9][0-9]) (.*)", currency_info)
+                if stuff:
+                    amount, currency_type = stuff.groups()
+                    amount = amount.replace('.', '')
+                    
+                    trans.imported_original_amount = int(amount)
+                    trans.imported_original_currency = models.Currency.objects.get(pk=CURRENCY_MAP[currency_type])
+            else:
+                trans.imported_location = 'Australia'
+            
+            print trans

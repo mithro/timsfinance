@@ -1,7 +1,7 @@
 [
   {
     "model": "finance.Currency",
-    "pk": 1,
+    "pk": "AUD",
     "fields": {
       "currency_id": "AUD",
       "description": "Australian Dollar"
@@ -9,10 +9,26 @@
   },
   {
     "model": "finance.Currency",
-    "pk": 2,
+    "pk": "USD",
     "fields": {
       "currency_id": "USD",
       "description": "United States Dollar"
+    }
+  },
+  {
+    "model": "finance.Currency",
+    "pk": "CAD",
+    "fields": {
+      "currency_id": "CAD",
+      "description": "United States Dollar"
+    }
+  },
+  {
+    "model": "finance.Currency",
+    "pk": "GBP",
+    "fields": {
+      "currency_id": "GBP",
+      "description": "Great British Pound"
     }
   },
   {

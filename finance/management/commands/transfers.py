@@ -24,7 +24,7 @@ class Command(BaseCommand):
     TRANSFERS = ("PAYMENT", "PMNT", "TRANSFER")
 
     def associate(self, a, b):
-        return models.RelatedTransactions(trans_from=a, trans_to=b, type="A", relationship="TRANSFER")
+        return models.RelatedTransaction(trans_from=a, trans_to=b, type="A", relationship="TRANSFER")
 
     def handle(self, *args, **options):
         for trans in models.Transaction.objects.all():
@@ -38,8 +38,9 @@ class Command(BaseCommand):
             print trans
 
             # If this already had reference set, then done
-            if len(trans.reference.all()) > 0:
-                print "    ", trans.reference.all()
+            related = trans.related_transactions(relationship="TRANSFER")
+            if len(related) > 0:
+                print "    ", related
                 continue
 
             # First attempt to find a transaction 7 days either way with the exact same amount

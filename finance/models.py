@@ -6,7 +6,9 @@
 import locale
 
 from django.db import models
+from django.db.models import Q
 from django.contrib import admin
+
 
 class Currency(models.Model):
     currency_id = models.CharField(max_length=200, primary_key=True)
@@ -72,7 +74,7 @@ class Account(models.Model):
 
     @property
     def latest_transaction(self):
-        q = Transactions.object.get(account_id=self)
+        q = Transaction.object.get(account=self)
         q.order_by("imported_effective_date")
 
     @property
@@ -91,15 +93,39 @@ class AccountAdmin(admin.ModelAdmin):
     list_filter = ('site',)
 
 
-class RelatedTransactions(models.Model):
+class Fee(models.Model):
+    account = models.ForeignKey('Account')
+    
+    #description = models.CharField(max_length=255)
+
+    # Regex to find transactions which have Fees applied to them.
+    regex = models.CharField(max_length=255)
+
+    # Fee amount
+    amount = models.CharField(max_length=255)
+
+    # Fee type
+    FEE_TYPE = (
+        ('F', 'Fixed'),
+        ('%', 'Percentage'),
+        ('M', 'Mixed'),
+        )
+    type = models.CharField(max_length=1, choices=FEE_TYPE)
+
+class FeeAdmin(admin.ModelAdmin):
+    list_display = ('account', 'regex', 'amount', 'type')
+
+
+class RelatedTransaction(models.Model):
     trans_from = models.ForeignKey('Transaction', related_name='+')
     trans_to = models.ForeignKey('Transaction', related_name='+')
 
     TRANSACTION_RELATIONSHIPS = (
-        ('FEE', 'Fee'),
+        ('FEE', 'Bank Fee'),
         ('TRANSFER', 'Transfer between accounts'),
+        ('SHIPPING', 'Shipping costs for a purchase'),
         )
-    relationship = models.CharField(max_length=2, choices=TRANSACTION_RELATIONSHIPS)
+    relationship = models.CharField(max_length=1, choices=TRANSACTION_RELATIONSHIPS)
     
     TRANSACTION_TYPES = (
         ('A', 'Automatic'),
@@ -108,8 +134,15 @@ class RelatedTransactions(models.Model):
         )
     type = models.CharField(max_length=1, choices=TRANSACTION_TYPES)
 
+    fee = models.ForeignKey('Fee', null=True)
+
     def __unicode__(self):
         return "%s <-- %s --> %s" % (self.trans_from, self.relationship, self.trans_to)
+
+class RelatedTransactionAdmin(admin.ModelAdmin):
+    list_display = ('trans_to', 'trans_from', 'relationship', 'type')
+    list_filter = ('type', 'relationship',)
+
 
 class Transaction(models.Model):
     account = models.ForeignKey('Account')
@@ -131,7 +164,46 @@ class Transaction(models.Model):
     imported_original_amount = models.IntegerField(null=True)
 
     # Sometimes this transaction references another transaction
-    reference = models.ManyToManyField('self', through='RelatedTransactions', symmetrical=False)
+    reference = models.ManyToManyField('self', through='RelatedTransaction', symmetrical=False)
+
+    def related_transactions(self, type=None, relationship=None, fee=None):
+        """Get the related transactions to this one.
+
+        Args:
+            type: Filter transactions to a give type such as Automatic, Manual
+                  or Tombstone.
+            relationship: Filter transactions to a give relationship such as
+                          Transfer, Fee or Shipping.
+            fee: If filtering transactions to the Fee type, only return
+                 transactions which are associated with a given fee.
+        """
+        q = RelatedTransaction.objects.all()
+        q = q.filter(Q(trans_from=self) | Q(trans_to__exact=self))
+
+        if type is not None:
+            q = q.filter(type__exact=type)
+
+        if relationship is not None:
+            q = q.filter(relationship__exact=relationship)
+
+            if relationship.upper().startswith("F") and fee is not None:
+                q = q.filter(fee__exact=fee)
+
+        return q
+
+    def distribute(self, relationship):
+        transactions = list(related_transactions(relationship))
+
+        amount = 0
+        for trans in transactions:
+            amount += trans.imported_amount
+
+        per_dollar = self.imported_amount/amount
+
+        output = []
+        for trans in transaction:
+            output.append((trans, int(per_dollar*trans.imported_amount)))
+        return output
 
     # These are the values which a user can enter/override
     override_description = models.CharField(max_length=200, null=True)

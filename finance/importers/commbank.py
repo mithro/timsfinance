@@ -192,7 +192,11 @@ class CommBankNetBank(Importer):
                 trans = models.Transaction(account=account, trans_id=trans_id)
 
             trans.imported_entered_date = datetime.datetime.strptime(entered_date, '%d/%m/%Y')
-            trans.imported_description = mangled_desc[:25].strip()
+            # For some reason the THANK-YOU text is allowed to be longer then normal text :/
+            if "THANK YOU" not in mangled_desc:
+                trans.imported_description = mangled_desc[:25].strip()
+            else:
+                trans.imported_description = mangled_desc.strip()
 
             # Remove the decimal so we get back to cents
             amount = amount.replace('.', '')

@@ -91,6 +91,26 @@ class AccountAdmin(admin.ModelAdmin):
     list_filter = ('site',)
 
 
+class RelatedTransactions(models.Model):
+    trans_from = models.ForeignKey('Transaction', related_name='+')
+    trans_to = models.ForeignKey('Transaction', related_name='+')
+
+    TRANSACTION_RELATIONSHIPS = (
+        ('FEE', 'Fee'),
+        ('TRANSFER', 'Transfer between accounts'),
+        )
+    relationship = models.CharField(max_length=2, choices=TRANSACTION_RELATIONSHIPS)
+    
+    TRANSACTION_TYPES = (
+        ('A', 'Automatic'),
+        ('M', 'Manual'),
+        ('T', 'Tombstone'),
+        )
+    type = models.CharField(max_length=1, choices=TRANSACTION_TYPES)
+
+    def __unicode__(self):
+        return "%s <-- %s --> %s" % (self.trans_from, self.relationship, self.trans_to)
+
 class Transaction(models.Model):
     account = models.ForeignKey('Account')
 
@@ -111,8 +131,7 @@ class Transaction(models.Model):
     imported_original_amount = models.IntegerField(null=True)
 
     # Sometimes this transaction references another transaction
-    imported_reference = models.ManyToManyField('self')
-    override_reference = models.ManyToManyField('self')
+    reference = models.ManyToManyField('self', through='RelatedTransactions', symmetrical=False)
 
     # These are the values which a user can enter/override
     override_description = models.CharField(max_length=200, null=True)
@@ -132,16 +151,34 @@ class Transaction(models.Model):
         get_latest_by = "imported_entered_date"
         ordering = ["-imported_entered_date", "-imported_effective_date"]
 
+
 def dollar(text, field_name, currency):
     def f(obj):
         value = getattr(obj, field_name)
         if value is not None:
-            return ("%s%s.%s" % (eval("obj.%s" % currency), locale.currency(int(value/100), symbol=False, grouping=True)[:-3], str(value)[-2:]))
+            value = str(value)
+            if value[0] == "-":
+                sign = "-"
+                value = value[1:]
+            else:
+                sign = "+"
+            cents = value[-2:]
+            dollars = list(value[:-2])
+
+            bits = [""]
+            while len(dollars) > 0:
+                if len(bits[0]) == 3:
+                    bits.insert(0, "")
+                bits[0] = dollars.pop(-1)+bits[0]
+            if bits[0] == "":
+                bits[0] = "0"
+
+            return "$"+sign+",".join(bits)+'.'+cents
         return "(None)"
     f.short_description = text
     return f
 
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('account', 'trans_id', 'imported_effective_date', 'imported_entered_date', 'imported_description', dollar('Amount', 'imported_amount', 'account.currency.symbol'), 'imported_original_currency', dollar('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'))
+    list_display = ('account', 'trans_id', 'imported_effective_date', 'imported_entered_date', 'imported_description', dollar('Amount', 'imported_amount', 'account.currency.symbol'), 'imported_original_currency', 'imported_location', dollar('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'))
     list_filter = ('account',)
     search_fields = ('imported_description', 'override_description')

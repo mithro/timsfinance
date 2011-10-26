@@ -155,7 +155,7 @@ class PeoplesChoiceCreditUnion(Importer):
                 trans.imported_effective_date = datetime.datetime.strptime(row['Effective Date'], '%d/%m/%Y')
 
             trans.imported_description = row['Transaction Description'].strip()
-            if '(OS)' in row['Transaction Description']:
+            if '(OS)' in row['Transaction Description'] or '(O/S)' in row['Transaction Description']:
                 trans.imported_location = "Outside Australia"
             else:
                 trans.imported_location = "Australia"

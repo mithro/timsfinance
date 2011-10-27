@@ -26,14 +26,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         for account in models.Account.objects.all():
             for fee in account.fee_set.all():
+                print
+                print "Account:", account, "Fee:", fee
+                print "----------------------------------------"
 
                 for trans in account.transaction_set.all():
-                    print
-                    fee_already = trans.related_transactions(relationship="FEE", fee=fee)
-                    if len(fee_already) > 0:
-                        print "Fee already associated for ", trans, fee_already[0]
-                        continue
-
                     matches = True
                     for regex in fee.regex.all():
                         field_value = getattr(trans, regex.field)
@@ -54,17 +51,34 @@ class Command(BaseCommand):
                     if not matches:
                         continue
 
-                    if fee.type == '%':
-                        percent = float(fee.amount[:-1])/100
-                        fee_amount = -abs(math.floor(trans.imported_amount * percent))
+                    fee_already = trans.related_transactions(relationship="FEE", fee=fee)
+                    if len(fee_already) > 0:
+                        print "Fee already associated for %60s ---> %s" % (trans, fee_already[0])
+                        continue
 
                     q = models.Transaction.objects.all(
                         ).filter(account__exact=account
                         ).filter(imported_entered_date__gte=trans.imported_entered_date
                         ).filter(imported_entered_date__lt=trans.imported_entered_date+datetime.timedelta(days=2)
-                        ).filter(imported_amount__gte=fee_amount-1
-                        ).filter(imported_amount__lte=fee_amount+1
-                        ).order_by("imported_entered_date")
+                        ).order_by("imported_entered_date"
+                        ).exclude(trans_id__exact=trans.trans_id
+                        )
+
+                    if fee.type == '%':
+                        percent = float(fee.amount[:-1])/100
+                        fee_amount = -abs(math.floor(trans.imported_amount * percent))
+
+                        q = q.filter(imported_amount__gte=fee_amount-2
+                            ).filter(imported_amount__lte=fee_amount+2
+                            )
+
+                    elif fee.type == "F":
+                        fee_amount = -int(fee.amount)
+
+                        q = q.filter(imported_amount__exact=fee_amount)
+
+                    else:
+                        raise TypeError("Unknown fee type %s (%s)." % (regex.type, regex))
 
                     for fee_trans in q:
                         fee_related = fee_trans.related_transactions(relationship="FEE", fee=fee)

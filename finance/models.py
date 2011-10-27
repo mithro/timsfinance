@@ -9,7 +9,7 @@ from django.db import models
 from django.db.models import Q
 from django.contrib import admin
 
-from finance.utils import dollar_display
+from finance.utils import dollar_fmt, dollar_display
 
 ###############################################################################
 
@@ -114,7 +114,9 @@ class SiteAdmin(admin.ModelAdmin):
 class Account(models.Model):
     """An account, associated with a "site" which is normally a bank."""
     site = models.ForeignKey('Site')
+
     account_id = models.CharField(max_length=200)
+    short_id = models.CharField(max_length=8, null=True)
 
     description = models.CharField(max_length=255)
     currency = models.ForeignKey('Currency')
@@ -132,14 +134,21 @@ class Account(models.Model):
         # starting_balance + sum(transactions.imported_amount)
         pass
 
+    @property
+    def sql_id(self):
+        if self.short_id:
+            return self.short_id
+        else:
+            return "%s (%s)" % (self.account_id, self.description)
+
     def __unicode__(self):
-        return "%s (%s)" % (self.account_id, self.description)
+        return self.sql_id
 
     class Meta:
         unique_together = (("site", "account_id"))
 
 class AccountAdmin(admin.ModelAdmin):
-    list_display = ('site', 'account_id', 'description', 'currency', 'imported_last', 'current_balance')
+    list_display = ('site', 'sql_id', 'description', 'currency', 'imported_last', 'current_balance')
     list_filter = ('site',)
 
 ###############################################################################
@@ -188,6 +197,10 @@ class Fee(models.Model):
         ('E', 'External transaction.'),
         )
     model = models.CharField(max_length=1, choices=FEE_MODEL)
+
+    def __unicode__(self):
+        return "%s - %s" % (self.account, self.description)
+
 
 class FeeAdmin(admin.ModelAdmin):
     list_display = ('account', 'description', 'amount', 'type', 'model')
@@ -325,9 +338,19 @@ class Transaction(models.Model):
     # Primary category
     primary_category = models.ForeignKey('Category', related_name='transaction_primary_set', null=True)
 
-    # Tagging...
+    @property
+    def description(self):
+        description = self.imported_description
+        if self.override_description:
+            description = self.override_description
+        return description
+
     def __unicode__(self):
-        return self.trans_id
+        return "%s %s" % (
+            self.description,
+            dollar_fmt(self.imported_amount,
+                       currency=self.account.currency.symbol),
+            )
 
     class Meta:
         unique_together = (("account", "trans_id"))
@@ -335,7 +358,7 @@ class Transaction(models.Model):
         ordering = ["-imported_entered_date", "-imported_effective_date"]
 
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('account', 'trans_id', 'imported_effective_date', 'imported_entered_date', 'imported_description', dollar_display('Amount', 'imported_amount', 'account.currency.symbol'), 'imported_original_currency', 'imported_location', dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'))
+    list_display = ('account', 'imported_effective_date', 'imported_entered_date', 'imported_description', dollar_display('Amount', 'imported_amount', 'account.currency.symbol'), 'imported_original_currency', 'imported_location', dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'))
     list_filter = ('account',)
     search_fields = ('imported_description', 'override_description')
 

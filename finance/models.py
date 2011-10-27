@@ -122,7 +122,7 @@ class Account(models.Model):
     currency = models.ForeignKey('Currency')
 
     # Latest import time that occured
-    imported_last = models.DateTimeField('last import')
+    last_import = models.DateTimeField('last import')
 
     @property
     def latest_transaction(self):

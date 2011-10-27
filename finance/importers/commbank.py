@@ -1,5 +1,4 @@
 #!/usr/bin/python
-#
 # -*- coding: utf-8 -*-
 # vim: set ts=4 sw=4 et sts=4 ai:
 
@@ -49,7 +48,7 @@ class CommBankNetBank(Importer):
     @classmethod
     def _get_account_table(cls, driver):
       return driver.find_element_by_id("MyPortfolioGrid1_a")
-     
+
     @classmethod
     def _account_table_found(cls, driver):
       try:
@@ -177,10 +176,10 @@ class CommBankNetBank(Importer):
                 self.home()
                 continue
 
-
-    def parse_file(self, account, handle, starting_balance):
+    @staticmethod
+    def parse_file(account, handle, starting_balance):
         transactions = []
-        #                     0                        | location   ##1011               
+        #                     0                        | location   ##1011
         # 18/10/2011,"+9.23","PREMIUM TOURS LTD        LONDON  N1 0 ##1011           6.00 POUND STERLING",""
         current_balance = starting_balance
         for entered_date, amount, mangled_desc, _ in csv.reader(handle):
@@ -192,11 +191,14 @@ class CommBankNetBank(Importer):
                 trans = models.Transaction(account=account, trans_id=trans_id)
 
             trans.imported_entered_date = datetime.datetime.strptime(entered_date, '%d/%m/%Y')
+
             # For some reason the THANK-YOU text is allowed to be longer then normal text :/
-            if "THANK YOU" not in mangled_desc:
+            if "THANK YOU" not in mangled_desc.upper():
                 trans.imported_description = mangled_desc[:25].strip()
+                extra_info = mangled_desc[25:].strip()
             else:
                 trans.imported_description = mangled_desc.strip()
+                extra_info = ""
 
             # Remove the decimal so we get back to cents
             amount = amount.replace('.', '')
@@ -207,10 +209,16 @@ class CommBankNetBank(Importer):
 
             # Commbank reports extra info in the description about any currency
             # conversion that happened. Lets try and extract that info.
-            extra_info = mangled_desc[25:].strip()
             if len(extra_info) > 0:
+                split_on = None
+                # FIXME: These must mean smoething?
                 if '##1011' in extra_info:
-                    location, currency_info = [x.strip() for x in extra_info.split('##1011')]
+                    split_on = '##1011'
+                if '##0911' in extra_info:
+                    split_on = '##0911'
+
+                if split_on:
+                    location, currency_info = [x.strip() for x in extra_info.split(split_on)]
 
                     # Get the location info
                     trans.imported_location = location.strip()
@@ -220,13 +228,13 @@ class CommBankNetBank(Importer):
                     if stuff:
                         amount, currency_type = stuff.groups()
                         amount = amount.replace('.', '')
-                        
+
                         trans.imported_original_amount = int(amount)*(trans.imported_amount/abs(trans.imported_amount))
                         trans.imported_original_currency = models.Currency.objects.get(pk=CURRENCY_MAP[currency_type])
                 else:
                     trans.imported_location = extra_info + ', Australia'
             else:
                 trans.imported_location = 'Australia'
-           
+
             transactions.append(trans)
         return transactions

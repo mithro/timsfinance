@@ -1,16 +1,31 @@
-"""
-This file demonstrates writing tests using the unittest module. These will pass
-when you run "manage.py test".
 
-Replace this with more appropriate tests for your application.
-"""
+import re
+import os
+import unittest
+import doctest
 
-from django.test import TestCase
+from finance.importers import commbank_test
+import finance.utils
 
 
-class SimpleTest(TestCase):
-    def test_basic_addition(self):
-        """
-        Tests that 1 + 1 always equals 2.
-        """
-        self.assertEqual(1 + 1, 2)
+
+def suite():
+    mylocation = os.path.dirname(__file__)
+
+    suite = unittest.TestSuite()
+    for dirpath, dirnames, filenames in os.walk(mylocation):
+        for filename in filenames:
+           remaining = dirpath[len(os.path.commonprefix([mylocation, dirpath])):].replace('/', '.')
+           test = "finance%s.%s" % (remaining, filename[:-3])
+
+           # Unittest test
+           if filename.endswith('_test.py'):
+               suite.addTest(unittest.TestLoader().loadTestsFromName(test))
+
+           # Docutil test
+           if filename.endswith('.py'):
+               if re.search('>>>', file(os.path.join(dirpath, filename)).read()):
+                   suite.addTest(doctest.DocTestSuite(finance.utils))
+
+
+    return suite

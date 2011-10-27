@@ -95,5 +95,5 @@
       "description": "Bank Interest Taken",
       "parent": "bank"
     }
-  },
+  }
 ]

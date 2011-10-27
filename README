@@ -13,5 +13,9 @@ Features
  * Flexible automatic categorisation of transactions.
 
 
-
+Requirements
+----------------------------------------------
+ * Python 2.6
+ * python-webdriver
+ * django > 1.3
 

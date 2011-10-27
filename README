@@ -1,0 +1,17 @@
+
+
+Features
+----------------------------------------------
+
+ * Automagical download of accounts and transactions from the following banks:
+   * Commonwealth Bank of Australia
+   * People's Choice Credit Union (formally Savings & Loans Credit Union or Australian Central Credit Union)
+
+ * Automatic detection and linking of transfers between to accounts.
+ * Automatic detection of fees and linking to transactions which caused them.
+
+ * Flexible automatic categorisation of transactions.
+
+
+
+

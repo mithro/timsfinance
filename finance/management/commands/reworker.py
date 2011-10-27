@@ -46,6 +46,8 @@ class Command(BaseCommand):
         for account in models.Account.objects.all():
             for trans in account.transaction_set.all():
                 for possible in "imported_location", "imported_description":
+                    override = possible.replace("imported", "override")
+
                     orig_value = getattr(trans, possible)
                     value = orig_value
 
@@ -83,6 +85,12 @@ class Command(BaseCommand):
                     value = re.sub(', $', '', value)
                     value = re.sub('^ *,', '', value)
 
+                    if orig_value != value and getattr(trans, override) == None:
+                        print account, "%40s" % trans
+                        print repr(orig_value)
+                        print repr(value)
+                        print repr(getattr(trans, override))
+                        print
+                        setattr(trans,override, value)
 
-                    if orig_value != value:
-                        print account, "%40s" % trans, orig_value, "-->", value
+                trans.save()

@@ -1,5 +1,4 @@
 #!/usr/bin/python
-#
 # -*- coding: utf-8 -*-
 # vim: set ts=4 sw=4 et sts=4 ai:
 
@@ -106,7 +105,7 @@ class Site(models.Model):
         return self.site_id
 
 class SiteAdmin(admin.ModelAdmin):
-    list_display = ('site_id', 'username', 'last_import')
+    list_display = ('site_id', 'username', 'importer')
     list_filter = ('importer',)
 
 ###############################################################################
@@ -148,7 +147,7 @@ class Account(models.Model):
         unique_together = (("site", "account_id"))
 
 class AccountAdmin(admin.ModelAdmin):
-    list_display = ('site', 'sql_id', 'description', 'currency', 'imported_last', 'current_balance')
+    list_display = ('site', 'sql_id', 'description', 'currency', 'current_balance')
     list_filter = ('site',)
 
 ###############################################################################
@@ -281,6 +280,10 @@ class Transaction(models.Model):
     # Sometimes this transaction references another transaction
     reference = models.ManyToManyField('self', through='RelatedTransaction', symmetrical=False)
 
+    # These are the values which a user can enter/override
+    override_description = models.CharField(max_length=200, null=True)
+    override_location = models.CharField(max_length=200, null=True)
+
     def related_transactions(self, type=None, relationship=None, fee=None):
         """Get the related transactions to this one.
 
@@ -329,9 +332,6 @@ class Transaction(models.Model):
             output.append((trans, int(per_dollar*trans.imported_amount)))
         return output
 
-    # These are the values which a user can enter/override
-    override_description = models.CharField(max_length=200, null=True)
-
     # Suggested category
     suggested_categories = models.ManyToManyField('Category', related_name='transaction_suggested_set')
 
@@ -344,6 +344,13 @@ class Transaction(models.Model):
         if self.override_description:
             description = self.override_description
         return description
+
+    @property
+    def location(self):
+        location = self.imported_location
+        if self.override_location:
+            location = self.override_location
+        return location
 
     def __unicode__(self):
         return "%s %s" % (
@@ -358,9 +365,9 @@ class Transaction(models.Model):
         ordering = ["-imported_entered_date", "-imported_effective_date"]
 
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('account', 'imported_effective_date', 'imported_entered_date', 'imported_description', dollar_display('Amount', 'imported_amount', 'account.currency.symbol'), 'imported_original_currency', 'imported_location', dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'))
+    list_display = ('account', 'imported_effective_date', 'imported_entered_date', 'description', dollar_display('Amount', 'imported_amount', 'account.currency.symbol'), 'imported_original_currency', 'location', dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'))
     list_filter = ('account',)
-    search_fields = ('imported_description', 'override_description')
+    search_fields = ('imported_description', 'override_description', 'imported_location', 'override_location')
 
 ###############################################################################
 

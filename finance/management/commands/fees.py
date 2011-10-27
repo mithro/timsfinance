@@ -26,7 +26,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         for account in models.Account.objects.all():
             for fee in account.fee_set.all():
-                field, regex = fee.regex.split(':', 1)
 
                 for trans in account.transaction_set.all():
                     print
@@ -35,11 +34,24 @@ class Command(BaseCommand):
                         print "Fee already associated for ", trans, fee_already[0]
                         continue
 
-                    field_value = getattr(trans, field)
-                    if field_value is None:
-                        continue
+                    matches = True
+                    for regex in fee.regex.all():
+                        field_value = getattr(trans, regex.field)
+                        if field_value is None:
+                            matches = False
+                            continue
 
-                    if not re.match(regex, str(field_value)):
+                        if regex.regex_type == "S":
+                            if not re.search(regex.regex, str(field_value)):
+                                matches = False
+
+                        elif regex.regex_type == "M":
+                            if not re.match(regex.regex, str(field_value)):
+                                matches = False
+                        else:
+                            raise TypeError("Unknown regex type %s (%s)." % (regex.type, regex))
+
+                    if not matches:
                         continue
 
                     if fee.type == '%':
@@ -58,7 +70,7 @@ class Command(BaseCommand):
                         fee_related = fee_trans.related_transactions(relationship="FEE", fee=fee)
                         if len(fee_related) == 0:
                             print "Associating %-30s (%10i) with %s (%8i)" % (
-                                trans.imported_description, trans.imported_amount, 
+                                trans.imported_description, trans.imported_amount,
                                 fee_trans.imported_description, fee_trans.imported_amount)
                             self.associate(fee, trans, fee_trans).save()
                             break

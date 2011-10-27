@@ -96,26 +96,4 @@
       "parent": "bank"
     }
   },
-  {
-    "pk": 9,
-    "model": "finance.Site",
-    "fields": {
-      "site_id": "pccu",
-      "username": "XXXXXXXX",
-      "importer": "finance.importers.pccu.PeoplesChoiceCreditUnion",
-      "image": "https://online.peopleschoicecu.com.au/daib/images/logon/cu5050/header-logo.gif",
-      "last_import": "1980-01-01 00:00:00"
-    }
-  },
-  {
-    "pk": 10,
-    "model": "finance.Site",
-    "fields": {
-      "site_id": "commbank",
-      "username": "XXXXXXXX",
-      "importer": "finance.importers.commbank.CommBankNetBank",
-      "image": "https://www3.netbank.commbank.com.au/static/css/current/fo/images/cba-logo-whitebg.gif?v=16",
-      "last_import": "1980-01-01 00:00:00"
-    }
-  }
 ]

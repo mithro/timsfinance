@@ -74,7 +74,6 @@ class Command(BaseCommand):
 
                     elif fee.type == "F":
                         fee_amount = -int(fee.amount)
-
                         q = q.filter(imported_amount__exact=fee_amount)
 
                     else:

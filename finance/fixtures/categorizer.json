@@ -1,0 +1,100 @@
+[
+  {
+    "pk": 1, 
+    "model": "finance.categorizer", 
+    "fields": {
+      "category": "transport/taxi", 
+      "regex": [
+        3
+      ], 
+      "amount_minimum": null, 
+      "personal": false, 
+      "amount_maximum": null, 
+      "accounts": []
+    }
+  }, 
+  {
+    "pk": 2, 
+    "model": "finance.categorizer", 
+    "fields": {
+      "category": "bank/fees/international", 
+      "regex": [
+        4
+      ], 
+      "amount_minimum": null, 
+      "personal": false, 
+      "amount_maximum": null, 
+      "accounts": []
+    }
+  }, 
+  {
+    "pk": 3, 
+    "model": "finance.categorizer", 
+    "fields": {
+      "category": "bank/fees", 
+      "regex": [
+        5
+      ], 
+      "amount_minimum": null, 
+      "personal": false, 
+      "amount_maximum": null, 
+      "accounts": []
+    }
+  }, 
+  {
+    "pk": 4, 
+    "model": "finance.categorizer", 
+    "fields": {
+      "category": "withdrawal/atm", 
+      "regex": [
+        6
+      ], 
+      "amount_minimum": null, 
+      "personal": false, 
+      "amount_maximum": null, 
+      "accounts": []
+    }
+  }, 
+  {
+    "pk": 5, 
+    "model": "finance.categorizer", 
+    "fields": {
+      "category": "withdrawal/atm", 
+      "regex": [
+        7
+      ], 
+      "amount_minimum": null, 
+      "personal": false, 
+      "amount_maximum": null, 
+      "accounts": []
+    }
+  }, 
+  {
+    "pk": 6, 
+    "model": "finance.categorizer", 
+    "fields": {
+      "category": "payroll", 
+      "regex": [
+        8
+      ], 
+      "amount_minimum": null, 
+      "personal": false, 
+      "amount_maximum": null, 
+      "accounts": []
+    }
+  }, 
+  {
+    "pk": 7, 
+    "model": "finance.categorizer", 
+    "fields": {
+      "category": "medical/prescription", 
+      "regex": [
+        9
+      ], 
+      "amount_minimum": null, 
+      "personal": false, 
+      "amount_maximum": null, 
+      "accounts": []
+    }
+  }
+]

@@ -27,11 +27,17 @@ class RegexForField(models.Model):
     )
     regex_type = models.CharField(max_length=1, choices=REGEX_TYPE)
 
+    regex_flags = models.CharField(max_length=255, null=True, blank=True)
+
     def __unicode__(self):
-        return "%s %s %s" % (self.field, self.regex_type, self.regex)
+        flags = self.regex_flags
+        if not flags:
+            flags = ""
+
+        return "%s %s/%s/%s" % (self.field, str(self.regex_type).lower(), self.regex, flags)
 
 class RegexForFieldAdmin(admin.ModelAdmin):
-    list_display = ('description', 'field', 'regex', 'regex_type')
+    list_display = ('description', 'field', 'regex', 'regex_type', 'regex_flags')
 
 ###############################################################################
 
@@ -375,14 +381,29 @@ class Categorizer(models.Model):
     """Look for signals in transactions that allow auto-categorization.  """
 
     # Accounts this categorizer applies to.
-    accounts = models.ManyToManyField('Account')
+    accounts = models.ManyToManyField('Account', null=True, blank=True)
+
+    @property
+    def accounts_set(self):
+        return self.accounts.all()
 
     # Regex
     regex = models.ManyToManyField('RegexForField')
 
-    # Value bounds
-    amount_minimum = models.IntegerField(null=True)
-    amount_maximum = models.IntegerField(null=True)
+    @property
+    def regex_set(self):
+        return self.regex.all()
 
-    # Category that
+    # Value bounds
+    amount_minimum = models.IntegerField(null=True, blank=True)
+    amount_maximum = models.IntegerField(null=True, blank=True)
+
+    # If this categorizer is personal
+    personal = models.BooleanField()
+
+    # Category that should be assigned
     category = models.ForeignKey('Category')
+
+class CategorizerAdmin(admin.ModelAdmin):
+    list_display = ('pk', 'accounts_set', 'regex_set', 'amount_minimum', 'amount_maximum', 'personal', 'category')
+    list_filter = ('category', 'personal')

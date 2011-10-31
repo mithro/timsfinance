@@ -153,7 +153,7 @@ class Account(models.Model):
         unique_together = (("site", "account_id"))
 
 class AccountAdmin(admin.ModelAdmin):
-    list_display = ('site', 'sql_id', 'description', 'currency', 'current_balance')
+    list_display = ('site', 'account_id', 'sql_id', 'description', 'currency', 'current_balance')
     list_filter = ('site',)
 
 ###############################################################################

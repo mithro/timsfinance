@@ -32,6 +32,7 @@ CURRENCY_TO_COUNTRY = {
     "AUD": "Australia",
     "CAD": "Canada",
     "USD": "USA",
+    "SGP": "Singapore",
     }
 
 
@@ -69,9 +70,10 @@ class Command(BaseCommand):
 
                     if currency.currency_id in CURRENCY_TO_COUNTRY:
                         country = CURRENCY_TO_COUNTRY[currency.currency_id]
-                        abbr = STATE_ABBR[country]
-                        for abbr, fullname in abbr.items():
-                                value = re.sub(' (%s) ?$' % abbr, ', %s, %s ' % (fullname, country), value)
+                        if country in STATE_ABBR:
+                            abbr = STATE_ABBR[country]
+                            for abbr, fullname in abbr.items():
+                                    value = re.sub(' (%s) ?$' % abbr, ', %s, %s ' % (fullname, country), value)
 
                     # Multiple space fixer
                     while value != re.sub("  ", " ", value):

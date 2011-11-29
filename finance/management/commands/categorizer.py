@@ -27,6 +27,8 @@ class Command(BaseCommand):
         for trans in models.Transaction.objects.all():
             categorizers = models.Categorizer.objects.all()
 
+            verbose = False
+
             for categorizer in categorizers:
                 if len(categorizer.accounts_set) > 0:
                     if trans.account not in categorizer.accounts_set:
@@ -46,11 +48,13 @@ class Command(BaseCommand):
 
                     field_value = getattr(trans, regex.field)
 
-                    matches = True
                     if field_value is None:
-                        matches = False
                         continue
 
+                    if verbose:
+                        print regex.field, field_value, regex.regex
+
+                    matches = True
                     if regex.regex_type == "S":
                         if not re.search(regex.regex, str(field_value), regex_flags):
                             matches = False

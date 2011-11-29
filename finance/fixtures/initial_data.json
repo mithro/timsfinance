@@ -45,6 +45,15 @@
     }
   },
   {
+    "model": "finance.Currency",
+    "pk": "SGP",
+    "fields": {
+      "currency_id": "SGP",
+      "description": "Singapore Dollar",
+      "symbol": "$"
+    }
+  },
+  {
     "pk": 3,
     "model": "finance.Category",
     "fields": {

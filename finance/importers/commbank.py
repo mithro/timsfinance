@@ -24,6 +24,7 @@ CURRENCY_MAP = {
     'US DOLLAR': 'USD',
     'POUND STERLING': 'GBP',
     'EURO NATL CURR UNI': 'EUR',
+    'SINGAPORE DOLLAR': 'SGP',
     }
 
 
@@ -212,10 +213,9 @@ class CommBankNetBank(Importer):
             if len(extra_info) > 0:
                 split_on = None
                 # FIXME: These must mean smoething?
-                if '##1011' in extra_info:
-                    split_on = '##1011'
-                if '##0911' in extra_info:
-                    split_on = '##0911'
+                groups = re.search('##[0-9][0-9][0-9][0-9]', extra_info)
+                if groups:
+                    split_on = groups.group()
 
                 if split_on:
                     location, currency_info = [x.strip() for x in extra_info.split(split_on)]

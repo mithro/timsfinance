@@ -17,7 +17,7 @@ class RegexForField(models.Model):
 
     This is used by both the Categorizer and the Fee systems.
     """
-    field = models.CharField(max_length=255)
+    field = models.CharField(max_length=255, default="imported_description")
     regex = models.CharField(max_length=255)
     description = models.CharField(max_length=255)
 
@@ -59,6 +59,10 @@ class Currency(models.Model):
 
     class Meta:
         verbose_name_plural = "currencies"
+        ordering = ["currency_id"]
+
+class CurrencyInline(admin.TabularInline):
+    model = Currency
 
 class CurrencyAdmin(admin.ModelAdmin):
     list_display = ('currency_id', 'description')
@@ -86,6 +90,10 @@ class Category(models.Model):
 
     class Meta:
         verbose_name_plural = "categories"
+        ordering = ["category_id"]
+
+class CategoryInline(admin.TabularInline):
+    model = Category
 
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('category_id', 'description')
@@ -113,6 +121,7 @@ class Site(models.Model):
 class SiteAdmin(admin.ModelAdmin):
     list_display = ('site_id', 'username', 'importer')
     list_filter = ('importer',)
+    inlines = []
 
 ###############################################################################
 
@@ -121,7 +130,7 @@ class Account(models.Model):
     site = models.ForeignKey('Site')
 
     account_id = models.CharField(max_length=200)
-    short_id = models.CharField(max_length=8, null=True)
+    short_id = models.CharField(max_length=20, null=True)
 
     description = models.CharField(max_length=255)
     currency = models.ForeignKey('Currency')
@@ -151,6 +160,11 @@ class Account(models.Model):
 
     class Meta:
         unique_together = (("site", "account_id"))
+
+class AccountInline(admin.TabularInline):
+    model = Account
+
+SiteAdmin.inlines.append(AccountInline)
 
 class AccountAdmin(admin.ModelAdmin):
     list_display = ('site', 'account_id', 'sql_id', 'description', 'currency', 'current_balance')
@@ -342,7 +356,14 @@ class Transaction(models.Model):
     suggested_categories = models.ManyToManyField('Category', related_name='transaction_suggested_set')
 
     # Primary category
-    primary_category = models.ForeignKey('Category', related_name='transaction_primary_set', null=True)
+    primary_category = models.ForeignKey('Category', related_name='transaction_primary_set', null=True, blank=True)
+
+    @property
+    def categories(self):
+        categories = list(self.suggested_categories.all())
+        if self.primary_category:
+            categories.insert(0, self.primary_category)
+        return categories
 
     @property
     def description(self):
@@ -370,10 +391,26 @@ class Transaction(models.Model):
         get_latest_by = "imported_entered_date"
         ordering = ["-imported_entered_date", "-imported_effective_date"]
 
+#class SuggestedCategoryInline(admin.TabularInline):
+#    description_short = "Suggested Categories"
+#    model = Transaction.suggested_categories.through
+
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('account', 'imported_effective_date', 'imported_entered_date', 'description', dollar_display('Amount', 'imported_amount', 'account.currency.symbol'), 'imported_original_currency', 'location', dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'))
-    list_filter = ('account',)
+    list_display = (
+        'account',
+        'imported_entered_date',
+        'description',
+        dollar_display('Amount', 'imported_amount', 'account.currency.symbol'),
+        'imported_original_currency',
+        'location',
+        dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'),
+        'primary_category',
+        'categories',
+        )
+    list_filter = ('account','primary_category')
     search_fields = ('imported_description', 'override_description', 'imported_location', 'override_location')
+    list_editable = ('primary_category',)
+    date_hierarchy = 'imported_entered_date'
 
 ###############################################################################
 

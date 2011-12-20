@@ -17,7 +17,7 @@ from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 
 
 class Importer(object):
-    
+
     def __init__(self):
         self.download_dir = "/tmp/%s-downloads-%i" % (self.__class__.__name__, os.getpid())
         os.mkdir(self.download_dir)
@@ -51,8 +51,9 @@ class Importer(object):
         for filename in os.listdir(self.download_dir):
             fullpath = os.path.join(self.download_dir, filename)
             print fullpath
-            yield file(fullpath, "r")
+            f = file(fullpath, "r")
             #os.unlink(fullpath)
+            yield f
 
     def login(self, username, password):
         pass

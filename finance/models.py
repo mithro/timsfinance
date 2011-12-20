@@ -286,23 +286,26 @@ class Transaction(models.Model):
     trans_id = models.CharField(max_length=200)
 
     # These are the values imported from the site
-    imported_effective_date = models.DateTimeField('effective date', null=True)
+    imported_effective_date = models.DateTimeField('effective date', null=True, blank=True)
     imported_entered_date = models.DateTimeField('entered date')
     imported_description = models.CharField(max_length=200)
     imported_location = models.CharField(max_length=200)
     imported_amount = models.IntegerField()
-    imported_running = models.IntegerField(null=True)
+    imported_running = models.IntegerField(null=True, blank=True)
 
     # Sometimes there was a currency conversion done
-    imported_original_currency = models.ForeignKey('Currency', null=True)
-    imported_original_amount = models.IntegerField(null=True)
+    imported_original_currency = models.ForeignKey('Currency', null=True, blank=True, related_name='imported_original_currency_set')
+    imported_original_amount = models.IntegerField(null=True, blank=True)
+    # Sometimes you manually entery the currency conversion
+    override_original_currency = models.ForeignKey('Currency', null=True, blank=True, related_name='override_original_currency_set')
+    override_original_amount = models.IntegerField(null=True, blank=True)
 
     # Sometimes this transaction references another transaction
     reference = models.ManyToManyField('self', through='RelatedTransaction', symmetrical=False)
 
     # These are the values which a user can enter/override
-    override_description = models.CharField(max_length=200, null=True)
-    override_location = models.CharField(max_length=200, null=True)
+    override_description = models.CharField(max_length=200, null=True, blank=True)
+    override_location = models.CharField(max_length=200, null=True, blank=True)
 
     def related_transactions(self, type=None, relationship=None, fee=None):
         """Get the related transactions to this one.
@@ -353,7 +356,7 @@ class Transaction(models.Model):
         return output
 
     # Suggested category
-    suggested_categories = models.ManyToManyField('Category', related_name='transaction_suggested_set')
+    suggested_categories = models.ManyToManyField('Category', related_name='transaction_suggested_set', blank=True)
 
     # Primary category
     primary_category = models.ForeignKey('Category', related_name='transaction_primary_set', null=True, blank=True)
@@ -401,7 +404,6 @@ class TransactionAdmin(admin.ModelAdmin):
         'imported_entered_date',
         'description',
         dollar_display('Amount', 'imported_amount', 'account.currency.symbol'),
-        'imported_original_currency',
         'location',
         dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'),
         'primary_category',

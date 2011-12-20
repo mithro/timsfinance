@@ -52,7 +52,7 @@ class PeoplesChoiceCreditUnion(Importer):
       driver.switch_to_default_content()
       driver.switch_to_frame("main1")
       return driver.find_element_by_class_name("list")
-    
+
     @classmethod
     def _account_table_found(cls, driver):
       try:
@@ -67,6 +67,12 @@ class PeoplesChoiceCreditUnion(Importer):
         return account_table.find_elements_by_xpath('tbody/tr')[1:]
 
     def home(self):
+        self.driver.switch_to_default_content()
+        self.driver.switch_to_frame("header1")
+        self.driver.find_element_by_name("Account Information").click()
+
+        self.driver.switch_to_default_content()
+        self.driver.switch_to_frame("main1")
         WebDriverWait(self.driver, 10).until(self._account_table_found)
 
     def accounts(self, site, dummy=[]):
@@ -82,9 +88,9 @@ class PeoplesChoiceCreditUnion(Importer):
         accounts = []
         for (account_id,
              description,
-             current_blance, 
-             overdraft_limit, 
-             uncollected_funds, 
+             current_blance,
+             overdraft_limit,
+             uncollected_funds,
              available_balance) in account_details:
 
             try:
@@ -123,7 +129,7 @@ class PeoplesChoiceCreditUnion(Importer):
 
         download_csv = self.driver.find_element_by_xpath('//input[@name="OutputRdo1"]').find_element_by_xpath('//input[@value=3]')
         download_csv.click()
- 
+
         start_date_field = self.driver.find_element_by_name('BeginDate')
         start_date_field.clear()
         start_date_field.send_keys(start_date.strftime('%d/%m/%Y'))
@@ -191,7 +197,7 @@ class PeoplesChoiceCreditUnion(Importer):
         #while len(temp_transactions) > 1:
         #    trans = temp_transactions.pop(0)
         #
-        #    difference = temp_transactions[0].imported_running - trans.imported_running 
+        #    difference = temp_transactions[0].imported_running - trans.imported_running
         #    print trans.imported_description, difference, trans.imported_amount
 
         return transactions

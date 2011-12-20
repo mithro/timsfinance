@@ -16,7 +16,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         end_date = datetime.datetime.now() - datetime.timedelta(days=1)
-        start_date = end_date - datetime.timedelta(days=60)
+        start_date = end_date - datetime.timedelta(days=30*6)
 
         print start_date, end_date
 
@@ -41,6 +41,7 @@ class Command(BaseCommand):
             try:
                 transactions = importer.transactions(account, start_date, end_date)
                 for transaction in transactions:
+                    print transaction
                     transaction.save()
             except Exception, e:
                 print e

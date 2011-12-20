@@ -27,16 +27,19 @@ class Importer(object):
         profile.set_preference('browser.download.folderList', 2)
         profile.set_preference('browser.helperApps.neverAsk.saveToDisk', "text/csv,text/comma-separated-values,application/octet-stream,application/csv")
 
+        self.driver = None
         self.driver = webdriver.Firefox(profile)
 
     def __del__(self, rmtree=shutil.rmtree):
         #rmtree(self.download_dir)
-        self.driver.quit()
+        if self.driver is not None:
+            self.driver.quit()
 
     def _get_files(self, timeout=30):
         starttime = time.time()
 
         time.sleep(5)
+
         # Wait until some files exist and all .part files are gone.
         while True:
             if (time.time() - starttime) > timeout:
@@ -52,7 +55,7 @@ class Importer(object):
             fullpath = os.path.join(self.download_dir, filename)
             print fullpath
             f = file(fullpath, "r")
-            #os.unlink(fullpath)
+            os.unlink(fullpath)
             yield f
 
     def login(self, username, password):

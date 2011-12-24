@@ -14,6 +14,7 @@ import shutil
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
+from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
 
 
 class Importer(object):
@@ -28,7 +29,10 @@ class Importer(object):
         profile.set_preference('browser.helperApps.neverAsk.saveToDisk', "text/csv,text/comma-separated-values,application/octet-stream,application/csv")
 
         self.driver = None
-        self.driver = webdriver.Firefox(profile)
+        firefox_bin = os.path.join(os.path.dirname(__file__), 'firefox', 'firefox')
+        assert os.path.exists(firefox_bin), firefox_bin
+
+        self.driver = webdriver.Firefox(firefox_profile=profile, firefox_binary=FirefoxBinary(firefox_bin))
 
     def __del__(self, rmtree=shutil.rmtree):
         #rmtree(self.download_dir)

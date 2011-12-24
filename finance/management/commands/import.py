@@ -9,6 +9,8 @@ import os
 import subprocess
 import time
 
+from optparse import make_option
+
 from django.core.management.base import BaseCommand, CommandError
 
 from finance import models
@@ -16,7 +18,7 @@ from finance import models
 
 class VNCServer(object):
 
-    def __init__(self, viewer=True):
+    def __init__(self, viewer=False):
         self.display = ':10'
         self.original = os.getenv('DISPLAY')
 
@@ -71,11 +73,32 @@ class Command(BaseCommand):
     args = ''
     help = 'Imports the transactions into an accounts.'
 
+    option_list = BaseCommand.option_list + (
+        make_option(
+            "--viewer", action="store_true", dest="viewer",
+            default=False,
+            help="Start a VNCViewer so you can watch the Selenium test run."),
+        make_option(
+            "--debug", action="store_true", dest="debug",
+            default=False,
+            help="Run the Python debugger on an exception."),
+        make_option(
+            "--accounts", action="append", dest="accounts",
+            help="Only import from the following accounts."),
+    )
+
     def handle(self, *args, **options):
         dry_run = len(args) > 0
 
-        with VNCServer():
+        with VNCServer(viewer=options['viewer']):
             for site in models.Site.objects.all():
+                # Only start up this site if it has an account we are going to import from.
+                if options['accounts']:
+                    for account in site.account_set.all():
+                        if account.account_id in options['accounts']:
+                            break
+                    else:
+                        continue
 
                 if not site.password:
                     password = getpass.getpass('Password for %s:' % site.site_id)
@@ -91,6 +114,9 @@ class Command(BaseCommand):
 
                 # Get transactions for each account
                 for account in site.account_set.all():
+                    if options['accounts'] and account.account_id not in options['accounts']:
+                        continue
+
                     importer.home()
 
                     end_date = datetime.datetime.now() - datetime.timedelta(days=1)
@@ -111,9 +137,9 @@ class Command(BaseCommand):
                             print transaction
                             transaction.save()
                     except Exception, e:
-                        print e
-                        import pdb
-                        pdb.post_mortem()
-                        raise
+                        if options['debug']:
+                            import pdb
+                            pdb.post_mortem()
+                            raise
         return
 

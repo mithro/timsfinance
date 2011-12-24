@@ -72,7 +72,12 @@ class PeoplesChoiceCreditUnion(Importer):
         self.driver.find_element_by_name("Account Information").click()
 
         self.driver.switch_to_default_content()
-        self.driver.switch_to_frame("main1")
+        while True:
+            try:
+                self.driver.switch_to_frame("main1")
+                break
+            except (NoSuchFrameException), e:
+                continue
         WebDriverWait(self.driver, 10).until(self._account_table_found)
 
     def accounts(self, site, dummy=[]):

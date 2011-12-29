@@ -3,6 +3,7 @@
 # vim: set ts=4 sw=4 et sts=4 ai:
 
 import locale
+import re
 
 from django.db import models
 from django.db.models import Q
@@ -35,6 +36,33 @@ class RegexForField(models.Model):
             flags = ""
 
         return "%s %s/%s/%s" % (self.field, str(self.regex_type).lower(), self.regex, flags)
+
+    def match(self, trans):
+        # Get the regex flags
+        regex_flags = 0
+        if self.regex_flags:
+            for f in str(self.regex_flags):
+                regex_flags = regex_flags | getattr(re, f)
+
+        # Get the field we are matching against from the transaction
+        field_value = getattr(trans, self.field)
+        if field_value is None:
+            return False
+
+        # Do the actual matching
+        if self.regex_type == "S":
+            if not re.search(self.regex, str(field_value), regex_flags):
+                return False
+
+        elif self.regex_type == "M":
+            if not re.match(self.regex, str(field_value), regex_flags):
+                return False
+
+        else:
+            raise TypeError("Unknown regex type %s (%s)." % (self.type, self))
+
+        return True
+
 
 class RegexForFieldAdmin(admin.ModelAdmin):
     list_display = ('description', 'field', 'regex', 'regex_type', 'regex_flags')

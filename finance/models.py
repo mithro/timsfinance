@@ -335,6 +335,17 @@ class Transaction(models.Model):
     override_description = models.CharField(max_length=200, null=True, blank=True)
     override_location = models.CharField(max_length=200, null=True, blank=True)
 
+    def account_filter(self, include=[], exclude=[]):
+        if include:
+            if self.account.account_id in include or self.account.short_id in include:
+                return False
+
+        if exclude:
+            if self.account.account_id in exclude or self.account.short_id in exclude:
+                return True
+
+        return False
+
     def related_transactions(self, type=None, relationship=None, fee=None):
         """Get the related transactions to this one.
 

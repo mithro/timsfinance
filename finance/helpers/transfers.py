@@ -18,7 +18,12 @@ class Transfers(base.Helper):
     # Descriptions which match the following should be looked at
     # Anything with "PAYMENT" in it
     # Anything with "TRANSFER" in it
-    TRANSFERS = ("PAYMENT", "PMNT", "TRANSFER")
+    TRANSFERS = ("PAYMENT", "PMNT", "TRANSFER", "Direct Debit")
+
+    def __init__(self, *args, **kw):
+        base.Helper.__init__(self, *args, **kw)
+
+        self.category = models.Category.objects.get(category_id='transfer')
 
     def associate(self, a, b):
         return base.Helper.associate(self, a, b, relationship="TRANSFER")
@@ -50,5 +55,12 @@ class Transfers(base.Helper):
             r = self.associate(trans, q[0])
             print "    Exact: ", r
             r.save()
+
+            trans.primary_category = self.category
+            trans.save()
+
+            q[0].primary_category = self.category
+            q[0].save()
         else:
             print "    Exact: ", q
+

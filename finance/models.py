@@ -309,9 +309,12 @@ class Transaction(models.Model):
     """
     account = models.ForeignKey('Account')
 
-    # Transaction ID for an account, the recommended format:
-    #  <Transaction Date><Transaction Text><Transaction amount><Account running value>
+    # See csv.py for a description of Transaction ID.
     trans_id = models.CharField(max_length=200)
+    parent_id = models.ManyToManyField('self', related_name="subtransactions", symmetrical=False)
+
+    # How to track the running total.
+    reconciliation_id = models.ForeignKey('Reconciliation')
 
     # These are the values imported from the site
     imported_effective_date = models.DateTimeField('effective date', null=True, blank=True)
@@ -319,7 +322,6 @@ class Transaction(models.Model):
     imported_description = models.CharField(max_length=200)
     imported_location = models.CharField(max_length=200)
     imported_amount = models.IntegerField()
-    imported_running = models.IntegerField(null=True, blank=True)
 
     # Sometimes there was a currency conversion done
     imported_original_currency = models.ForeignKey('Currency', null=True, blank=True, related_name='imported_original_currency_set')
@@ -422,7 +424,13 @@ class Transaction(models.Model):
         return location
 
     def __unicode__(self):
-        return "%s %s" % (
+        if self.parent_id:
+            name = "SubTrans"
+        else:
+            name = "Trans"
+
+        return "%s<%s %s>" % (
+            name,
             self.description,
             dollar_fmt(self.imported_amount,
                        currency=self.account.currency.symbol),
@@ -433,17 +441,12 @@ class Transaction(models.Model):
         get_latest_by = "imported_entered_date"
         ordering = ["-imported_entered_date", "-imported_effective_date"]
 
-#class SuggestedCategoryInline(admin.TabularInline):
-#    description_short = "Suggested Categories"
-#    model = Transaction.suggested_categories.through
-
 class TransactionAdmin(admin.ModelAdmin):
     list_display = (
         'account',
         'imported_entered_date',
         'description',
         dollar_display('Amount', 'imported_amount', 'account.currency.symbol'),
-        dollar_display('Amount', 'imported_running', 'account.currency.symbol'),
         'location',
         dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'),
         'primary_category',
@@ -453,6 +456,18 @@ class TransactionAdmin(admin.ModelAdmin):
     search_fields = ('imported_description', 'override_description', 'imported_location', 'override_location')
     list_editable = ('primary_category',)
     date_hierarchy = 'imported_entered_date'
+
+###############################################################################
+
+class Reconciliation(models.Model):
+    """Reconciliations are a way to track the balance of an account."""
+
+    account = models.ForeignKey('Account')
+    reconcile_id = models.AutoField(primary_key=True)
+    previous_id = models.ForeignKey('self', null=True, blank=True)
+
+    date = models.DateTimeField('date', auto_now_add=True)
+
 
 ###############################################################################
 

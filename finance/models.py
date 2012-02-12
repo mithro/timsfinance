@@ -443,6 +443,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'imported_entered_date',
         'description',
         dollar_display('Amount', 'imported_amount', 'account.currency.symbol'),
+        dollar_display('Amount', 'imported_running', 'account.currency.symbol'),
         'location',
         dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'),
         'primary_category',

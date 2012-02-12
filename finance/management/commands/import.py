@@ -90,12 +90,16 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = len(args) > 0
 
+        print options['accounts']
+
         with VNCServer(viewer=options['viewer']):
             for site in models.Site.objects.all():
                 # Only start up this site if it has an account we are going to import from.
                 if options['accounts']:
                     for account in site.account_set.all():
                         if account.account_id in options['accounts']:
+                            break
+                        if account.short_id in options['accounts']:
                             break
                     else:
                         continue
@@ -114,8 +118,11 @@ class Command(BaseCommand):
 
                 # Get transactions for each account
                 for account in site.account_set.all():
-                    if options['accounts'] and account.account_id not in options['accounts']:
-                        continue
+                    if options['accounts']:
+                        if account.account_id in options['accounts'] or account.short_id in options['accounts']:
+                            pass
+                        else:
+                            continue
 
                     importer.home()
 

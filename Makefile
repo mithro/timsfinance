@@ -58,6 +58,12 @@ prepare-serve: install
 serve: prepare-serve install
 	$(ACTIVATE) && python manage.py runserver
 
+git-cl-config: install
+	$(ACTIVATE) && git-cl config file://$$PWD/.codereview.settings
+
+upload: git-cl-config
+	$(ACTIVATE) && git-cl upload
+
 lint: install
 	@# R0904 - Disable "Too many public methods" warning
 	@# W0221 - Disable "Arguments differ from parent", as get and post will.

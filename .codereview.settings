@@ -1,0 +1,4 @@
+CODE_REVIEW_SERVER: codereview.mithis.com
+BASE_URL: https://github.com/mithro/timsfinance
+VIEW_VC: https://github.com/mithro/timsfinance/commit/
+CC_LIST: 

@@ -1,3 +1,9 @@
 finance.sqlite3
 *.pyc
 *.sw[op]*
+finance.sqlite3
+bin/
+build/
+include/
+lib/
+src/

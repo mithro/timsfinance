@@ -1,4 +1,4 @@
-CODE_REVIEW_SERVER: codereview.mithis.com
+CODE_REVIEW_SERVER: codereview.appspot.com
 BASE_URL: https://github.com/mithro/timsfinance
 VIEW_VC: https://github.com/mithro/timsfinance/commit/
 CC_LIST: 

@@ -94,7 +94,7 @@ def csv_changes(order, old_data, new_data):
         tag, i1, i2, j1, j2 = line_changes[0]
         if i2 <= common.a or j1 <= common.b:
             # Make sure that everything before the common section is just
-            # deletes of equals, no inserts.
+            # deletes or equals, no inserts.
             assert line_changes[0][0] in ("delete", "equal")
             line_changes.pop(0)
             continue

@@ -62,6 +62,61 @@ class NoCommonLines(Warning):
     pass
 
 
+def csv_changes(order, old_data, new_data):
+    """Finds the changes in the two csv files.
+
+    The theory is that you rollback to a common subset and then reply the
+    changes from the new file.
+
+    Returns:
+        deletes: List of rows that need to be rolled back before the
+            inserts can be applied.
+            (These are in the correct order needed to rollback, IE latest
+            first.)
+        inserts: List of rows that need to added to the database.
+            (These are in the correct order needed to insert, IE earlier
+            first.)
+    """
+    old_lines = list(order(old_data.split('\n')))
+    new_lines = list(order(new_data.split('\n')))
+
+    differ = difflib.SequenceMatcher(None, old_lines, new_lines)
+
+    common = differ.find_longest_match(0, -1, 0, -1)
+    if common.size == 0:
+        warnings.warn(
+            "No common lines found between imports," +
+                " assuming all lines are new.",
+            NoCommonLines)
+
+    line_changes = differ.get_opcodes()
+    while len(line_changes) > 0:
+        tag, i1, i2, j1, j2 = line_changes[0]
+        if i2 <= common.a or j1 <= common.b:
+            # Make sure that everything before the common section is just
+            # deletes of equals, no inserts.
+            assert line_changes[0][0] in ("delete", "equal")
+            line_changes.pop(0)
+            continue
+        break
+
+    deletes = []
+    inserts = []
+    for tag, i1, i2, j1, j2 in line_changes:
+        if tag == "equal":
+            for i in range(i1, i2):
+                deletes.append(('delete', old_lines[i]))
+
+    for tag, i1, i2, j1, j2 in line_changes:
+        if tag in ("delete", "replace"):
+            for i in range(i1, i2):
+                deletes.append(('delete', old_lines[i]))
+        if tag in ("insert", "replace", "equal"):
+            for i in range(j1, j2):
+                inserts.append(('insert', new_lines[i]))
+
+    return list(reversed(deletes)), inserts
+
 
 class CSVImporter(object):
 
@@ -78,63 +133,6 @@ class CSVImporter(object):
 
     def filter(self, fields, trans):
         pass
-
-    @staticmethod
-    def csv_changes(order, old_data, new_data):
-        """Finds the changes in the two csv files.
-
-        Returns:
-            deletes: List of rows that need to be rolled back before the
-                inserts can be applied.
-                (These are in the correct order needed to rollback, IE latest
-                first.)
-            inserts: List of rows that need to added to the database.
-                (These are in the correct order needed to insert, IE earlier
-                first.)
-        """
-
-        old_lines = list(order(old_data.split('\n')))
-        new_lines = list(order(new_data.split('\n')))
-
-        differ = difflib.SequenceMatcher(None, old_lines, new_lines)
-
-        common = differ.find_longest_match(0, -1, 0, -1)
-        if common.size == 0:
-            warnings.warn(
-                "No common lines found between imports," +
-                    " assuming all lines are new.",
-                NoCommonLines)
-
-        line_changes = differ.get_opcodes()
-        while len(line_changes) > 0:
-            tag, i1, i2, j1, j2 = line_changes[0]
-            if i2 <= common.a or j1 <= common.b:
-                # Make sure that everything before the common section is just
-                # deletes of equals, no inserts.
-                assert line_changes[0][0] in ("delete", "equal")
-                line_changes.pop(0)
-                continue
-            break
-
-        dirty = False
-
-        deletes = []
-        inserts = []
-        for tag, i1, i2, j1, j2 in line_changes:
-            if tag == "equal":
-                dirty = True
-                for i in range(i1, i2):
-                    deletes.append(('delete', old_lines[i]))
-
-        for tag, i1, i2, j1, j2 in line_changes:
-            if tag in ("delete", "replace"):
-                for i in range(i1, i2):
-                    deletes.append(('delete', old_lines[i]))
-            if tag in ("insert", "replace", "equal"):
-                for i in range(j1, j2):
-                    inserts.append(('insert', new_lines[i]))
-
-        return dirty, list(reversed(deletes)), inserts
 
     @transaction.commit_on_success
     def parse_file(self, account, handle):
@@ -160,8 +158,6 @@ class CSVImporter(object):
         lines = self.ORDER(list(csv.reader(StringIO.StringIO(merged_data))))
 
         date_counts = {}
-
-
         for fields in []:
             # Get the entered_date information
             entered_date = fields[FIELDS.index(self.ENTERED_DATE)]

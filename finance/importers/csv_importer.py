@@ -221,7 +221,7 @@ ORDER = lambda x: x  -> Order is already oldest first.
 ORDER = reversed     -> Order is newest first.
 """
 
-    def filter(self, fields, trans):
+    def filter(self, fields, trans):  # pylint:disable-msg=W0613,R0201
         """Extra filtering that may be needed for the CSV file.
 
         Args:
@@ -235,9 +235,17 @@ ORDER = reversed     -> Order is newest first.
 
     ###########################################################################
 
-
     @transaction.commit_on_success
     def parse_file(self, account, handle):
+        """Parse a CSV file into the database.
+
+        Arguments:
+            account: models.Account to import the data too.
+            handle: file handle of CSV file to import.
+
+        Results:
+            A list of transaction IDs which where changed.
+        """
         # ENTERED_DATE is a required field in the CSV
         assert self.Fields.ENTERED_DATE in self.FIELDS
 

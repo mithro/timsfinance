@@ -14,9 +14,9 @@ from finance.importers import csv_importer
 
 class SimpleExampleImporter(csv_importer.CSVImporter):
     FIELDS = [
-        csv_importer.CSVImporter.Fields.DATE,
-        csv_importer.CSVImporter.Fields.AMOUNT,
-        csv_importer.CSVImporter.Fields.DESCRIPTION,
+        csv_importer.FieldList.DATE,
+        csv_importer.FieldList.AMOUNT,
+        csv_importer.FieldList.DESCRIPTION,
         None]
     DATEFMT = "%d/%m/%Y"
     ORDER = reversed
@@ -24,11 +24,11 @@ class SimpleExampleImporter(csv_importer.CSVImporter):
 
 class RunningExampleImporter(csv_importer.CSVImporter):
     FIELDS = [
-        csv_importer.CSVImporter.Fields.EFFECTIVE_DATE,
-        csv_importer.CSVImporter.Fields.ENTERED_DATE,
-        csv_importer.CSVImporter.Fields.DESCRIPTION,
-        csv_importer.CSVImporter.Fields.AMOUNT,
-        csv_importer.CSVImporter.Fields.RUNNING_TOTAL_INC,
+        csv_importer.FieldList.EFFECTIVE_DATE,
+        csv_importer.FieldList.ENTERED_DATE,
+        csv_importer.FieldList.DESCRIPTION,
+        csv_importer.FieldList.AMOUNT,
+        csv_importer.FieldList.RUNNING_TOTAL_INC,
         ]
     DATEFMT = "%d/%m/%Y"
     ORDER = reversed

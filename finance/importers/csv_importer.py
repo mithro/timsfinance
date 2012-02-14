@@ -123,7 +123,18 @@ def csv_changes(order, old_data, new_data):
     return equals, deletes, inserts
 
 class FieldList(object):
-    """Maps field values from CSV output to field names in the description."""
+    """Maps field values from CSV output to field names on a transaction."""
+
+    UNIQUE_ID = '__unique_id'
+    DATE = 'imported_entered_date'
+    EFFECTIVE_DATE = 'imported_effective_date'
+    ENTERED_DATE = 'imported_entered_date'
+    DESCRIPTION = 'imported_description'
+    AMOUNT = 'imported_amount'
+    # Running total *includes* the line being processed transaction
+    RUNNING_TOTAL_INC = '__running_total_inc'
+    # Running total *excludes* the line being processed transaction
+    RUNNING_TOTAL_EXC = '__running_total_exc'
 
     def __init__(self, fields_desc, fields_value, datefmt):
         assert len(fields_desc) == len(fields_value), \
@@ -133,7 +144,7 @@ class FieldList(object):
 
         self.fields_desc = fields_desc
 
-        assert CSVImporter.Fields.ENTERED_DATE in fields_desc, \
+        assert self.ENTERED_DATE in fields_desc, \
             "Entered date is a required field, please fix the importer."
 
         for field_name, field_value in zip(fields_desc, fields_value):
@@ -168,9 +179,9 @@ class FieldList(object):
             solution at the moment.
         """
         # Get the entered_date information
-        if hasattr(self, CSVImporter.Fields.UNIQUE_ID):
+        if hasattr(self, self.UNIQUE_ID):
             # Get a unique ID for this transaction.
-            return getattr(self, CSVImporter.Fields.UNIQUE_ID)
+            return getattr(self, self.UNIQUE_ID)
         else:
             # No unique ID, we have to generate a unique ID.
             return "%s.%s" % (
@@ -200,22 +211,6 @@ class FieldList(object):
 
 class CSVImporter(object):
     """Base class for importers which import from .csv files."""
-
-    class Fields(object):
-        """Fields which can be imported."""
-        def __init__(self):
-            raise SyntaxError('Holder object, do not construct!')
-
-        UNIQUE_ID = '__unique_id'
-        DATE = 'imported_entered_date'
-        EFFECTIVE_DATE = 'imported_effective_date'
-        ENTERED_DATE = 'imported_entered_date'
-        DESCRIPTION = 'imported_description'
-        AMOUNT = 'imported_amount'
-        # Running total *includes* the line being processed transaction
-        RUNNING_TOTAL_INC = '__running_total_inc'
-        # Running total *excludes* the line being processed transaction
-        RUNNING_TOTAL_EXC = '__running_total_exc'
 
     # Override these attributes
     ###########################################################################
@@ -263,7 +258,7 @@ ORDER = reversed     -> Order is newest first.
             A list of transaction IDs which where changed.
         """
         # ENTERED_DATE is a required field in the CSV
-        assert self.Fields.ENTERED_DATE in self.FIELDS
+        assert FieldList.ENTERED_DATE in self.FIELDS
 
         # Step one, we need to find if there is any overlap with previous
         # imports

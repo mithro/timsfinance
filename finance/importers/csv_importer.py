@@ -51,7 +51,6 @@ import csv
 import datetime
 import difflib
 import re
-import warnings
 
 import django.core.exceptions
 from django.db import transaction
@@ -136,6 +135,9 @@ class FieldList(object):
     # Running total *excludes* the line being processed transaction
     RUNNING_TOTAL_EXC = '__running_total_exc'
 
+    # Set to avoid lint warnings
+    imported_entered_date = None
+
     def __init__(self, fields_desc, fields_value, datefmt):
         assert len(fields_desc) == len(fields_value), \
             "len(fields_desc) %i != len(fields_value) %i\n%r, %r" % (
@@ -143,6 +145,7 @@ class FieldList(object):
                 fields_desc, fields_value)
 
         self.fields_desc = fields_desc
+        self.fields_raw = fields_value
 
         assert self.ENTERED_DATE in fields_desc, \
             "Entered date is a required field, please fix the importer."
@@ -159,7 +162,8 @@ class FieldList(object):
             # Convert amount to an int
             elif field_name.endswith("_amount"):
                 assert re.sub('[^0-9.]', '', field_value)[-3] == '.', \
-                    "Amount %s was does not have two decimal places." % field_value
+                    "Amount %s was does not have two decimal places." % \
+                    field_value
                 field_value = re.sub('[^0-9]', '', field_value)
                 setattr(self, field_name, int(field_value))
 
@@ -172,6 +176,8 @@ class FieldList(object):
             # Just set it.
             else:
                 setattr(self, field_name, field_value)
+
+        assert self.imported_entered_date is not None
 
     def trans_id(self, date_count):
         """Create the transaction id.
@@ -203,15 +209,7 @@ class FieldList(object):
             setattr(trans, field_name, getattr(self, field_name))
 
     def __str__(self):
-        l = []
-        for field_name in self.fields_desc:
-            if field_name is None:
-                l.append(tuple())
-            elif field_name.startswith("__"):
-                l.append((field_name, None))
-            else:
-                l.append((field_name, getattr(self, field_name)))
-        return str(l)
+        return "<FieldList %s>" % zip(self.fields_desc, self.fields_raw)
 
 
 class CSVImporter(object):
@@ -279,9 +277,10 @@ ORDER = reversed     -> Order is newest first.
         except IndexError:
             old_data = ""
 
-        common_lines, delete_lines, insert_lines = csv_changes(self.ORDER, old_data, new_data)
+        common_lines, delete_lines, insert_lines = csv_changes(
+            self.ORDER, old_data, new_data)
 
-        # If there are no lines to insert, assume this import was a dud...
+        # If there are no lines to insert, assume this import was a dud.
         if len(insert_lines) == 0:
             return []
 
@@ -290,19 +289,29 @@ ORDER = reversed     -> Order is newest first.
             content=new_data)
 
         def annotate(lines):
+            """Walk backwards an annotate with number of transactions per day.
+
+            Args:
+                lines: Lines suitable for csv.reader
+
+            Yields:
+                Number of transactions per day before this transaction.
+                FieldList object.
+            """
             count = None
             previous_entered_date = None
             for fields in csv.reader(lines):
                 field_list = FieldList(self.FIELDS, fields, self.DATEFMT)
                 if field_list.imported_entered_date != previous_entered_date:
                     previous_entered_date = field_list.imported_entered_date
-                    count = self.date_count_query(account, field_list)
+                    count = self.date_count_query(
+                        account, field_list.imported_entered_date)
                 count -= 1
-                yield (count, fields, field_list)
+                yield (count, field_list)
 
-        # Roll back the following transactions as they have disapeared in the import
-        # We walk backwards rolling back the newest first
-        for i, fields, field_list in annotate(reversed(delete_lines)):
+        # Roll back the following transactions as they have disapeared in the
+        # import. We walk backwards rolling back the newest first.
+        for i, field_list in annotate(reversed(delete_lines)):
 
             # Find the transaction to rollback
             trans_id = field_list.trans_id(i)
@@ -312,12 +321,13 @@ ORDER = reversed     -> Order is newest first.
             except django.core.exceptions.ObjectDoesNotExist:
                 assert False, (
                     "During rollback, could not find transaction.\n"
-                    "%s %s\n%s\n" % (account, trans_id, fields))
+                    "%s %s\n%s\n" % (account, trans_id, field_list.fields_raw))
 
-            assert trans.imported_fields == repr(fields), (
+            assert trans.imported_fields == repr(field_list.fields_raw), (
                 "When rolling back"
                 " the found transaction's imported_fields don't match\n"
-                "(trans) %s != (rollback) %s\n%s %s" % (trans.imported_fields, repr(fields), account, trans_id))
+                "(indb) %s != (imported) %s\n" % (
+                    trans.imported_fields, repr(field_list.fields_raw)))
 
             # Mark the transaction as deleted
             trans.removed_by = imported
@@ -335,12 +345,14 @@ ORDER = reversed     -> Order is newest first.
             except django.core.exceptions.ObjectDoesNotExist:
                 assert False, (
                     "When checking common, could not find transaction.\n"
-                    "%s %s\n%s\n" % (account, trans_id, fields))
+                    "%s %s\n%s\n" % (account, trans_id, field_list.fields_raw))
 
             assert trans.imported_fields == repr(fields), (
                 "When checking common"
                 " the found transaction's imported_fields don't match\n"
-                "%s != %s" % (trans.imported_fields, repr(fields)))
+                "(indb) %s != %s (imported)" % (
+                    trans.imported_fields, repr(field_list.fields_raw)))
+
             trans.imported_also_by.add(imported)
             trans.save()
 
@@ -348,7 +360,8 @@ ORDER = reversed     -> Order is newest first.
         for fields in csv.reader(insert_lines):
             field_list = FieldList(self.FIELDS, fields, self.DATEFMT)
 
-            date_count = self.date_count_query(account, field_list)
+            date_count = self.date_count_query(
+                account, field_list.imported_entered_date)
 
             trans = models.Transaction()
             # Unique key
@@ -370,10 +383,11 @@ ORDER = reversed     -> Order is newest first.
                 # Save the transaction
                 trans.save()
 
-    def date_count_query(self, account, field_list):
+    def date_count_query(self, account, entered_date):
+        """Get the number of transactions on a given day."""
         return models.Transaction.objects.all(
             ).filter(account=account
-            ).filter(imported_entered_date=field_list.imported_entered_date
-            ).filter(removed_by=None  # Don't count transactions which have been removed
+            ).filter(imported_entered_date=entered_date
+            ).filter(removed_by=None  # Don't count removed transactions
             ).filter(parent_id=None  # Don't count sub-transactions
             ).count()

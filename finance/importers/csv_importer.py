@@ -258,7 +258,7 @@ ORDER = reversed     -> Order is newest first.
             handle: file handle of CSV file to import.
 
         Results:
-            A list of transaction IDs which where changed.
+            True if new Transactions where imported.
         """
         # ENTERED_DATE is a required field in the CSV
         assert FieldList.ENTERED_DATE in self.FIELDS
@@ -270,7 +270,7 @@ ORDER = reversed     -> Order is newest first.
         try:
             old_data_query = models.Imported.objects.all(
                 ).filter(account=account
-                ).order_by('date')
+                ).order_by('-date')
 
             old_data_obj = old_data_query[0]
             old_data = old_data_obj.content
@@ -282,7 +282,7 @@ ORDER = reversed     -> Order is newest first.
 
         # If there are no lines to insert, assume this import was a dud.
         if len(insert_lines) == 0:
-            return []
+            return False
 
         imported = models.Imported.objects.create(
             account=account,
@@ -336,7 +336,7 @@ ORDER = reversed     -> Order is newest first.
         # Mark these as also imported by this
         # Again we walk backwards as there might be many transactions for a
         # day, but only a given number ended up being common between imports.
-        for i, fields, field_list in annotate(reversed(common_lines)):
+        for i, field_list in annotate(reversed(common_lines)):
 
             trans_id = field_list.trans_id(i)
             try:
@@ -347,7 +347,7 @@ ORDER = reversed     -> Order is newest first.
                     "When checking common, could not find transaction.\n"
                     "%s %s\n%s\n" % (account, trans_id, field_list.fields_raw))
 
-            assert trans.imported_fields == repr(fields), (
+            assert trans.imported_fields == repr(field_list.fields_raw), (
                 "When checking common"
                 " the found transaction's imported_fields don't match\n"
                 "(indb) %s != %s (imported)" % (
@@ -382,6 +382,8 @@ ORDER = reversed     -> Order is newest first.
                 trans.state = "Active"
                 # Save the transaction
                 trans.save()
+
+        return True
 
     def date_count_query(self, account, entered_date):
         """Get the number of transactions on a given day."""

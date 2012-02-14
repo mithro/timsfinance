@@ -168,7 +168,7 @@ class CSVTestCase(djangotest.TestCase):
 """)
 
         importer = SimpleExampleImporter()
-        importer.parse_file(self.account, csv_basic)
+        self.assertTrue(importer.parse_file(self.account, csv_basic))
 
         self.assertAllTransEqual(
             [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
@@ -183,7 +183,7 @@ class CSVTestCase(djangotest.TestCase):
 09/11/2011,"0.20","Apple",""
 """)
         importer = SimpleExampleImporter()
-        importer.parse_file(self.account, csv_basic1)
+        self.assertTrue(importer.parse_file(self.account, csv_basic1))
 
         self.assertAllTransEqual(
             [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
@@ -194,7 +194,7 @@ class CSVTestCase(djangotest.TestCase):
 09/11/2011,"0.20","Boat",""
 09/11/2011,"0.20","Apple",""
 """)
-        importer.parse_file(self.account, csv_basic2)
+        self.assertFalse(importer.parse_file(self.account, csv_basic2))
 
         self.assertAllTransEqual(
             [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
@@ -209,7 +209,7 @@ class CSVTestCase(djangotest.TestCase):
 14/11/2011,"-0.20","INTNL TRANSACTION FEE",""
 """)
         importer = SimpleExampleImporter()
-        importer.parse_file(self.account, csv_duplicates)
+        self.assertTrue(importer.parse_file(self.account, csv_duplicates))
 
         self.assertAllTransEqual(
             [(u"2011-11-14 00:00:00.000000.0", False, u"INTNL TRANSACTION FEE"),
@@ -225,7 +225,7 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Apple",""
 """)
         importer = SimpleExampleImporter()
-        importer.parse_file(self.account, csv_missing_a)
+        self.assertTrue(importer.parse_file(self.account, csv_missing_a))
         self.assertAllTransEqual(
             [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
              (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
@@ -238,11 +238,63 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Boat",""
 07/11/2011,"0.20","Apple",""
 """)
-        importer.parse_file(self.account, csv_missing_b)
+        self.assertTrue(importer.parse_file(self.account, csv_missing_b))
 
         self.assertAllTransEqual(
             [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
              (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
+             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
+             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
+             (u"2011-11-07 00:00:00.000000.2", False, u"Doggy")])
+
+    def test_line_pogo_same_date(self):
+        csv_missing_a = SIO.StringIO("""\
+07/11/2011,"0.20","Doggy",""
+07/11/2011,"0.20","Cattle",""
+07/11/2011,"0.20","Boat",""
+07/11/2011,"0.20","Apple",""
+""")
+        importer = SimpleExampleImporter()
+        self.assertTrue(importer.parse_file(self.account, csv_missing_a))
+        self.assertAllTransEqual(
+            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
+             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
+             (u"2011-11-07 00:00:00.000000.2", False, u"Cattle"),
+             (u"2011-11-07 00:00:00.000000.3", False, u"Doggy")])
+
+        # Cattle disappears
+        csv_missing_b = SIO.StringIO("""\
+07/11/2011,"0.20","Doggy",""
+07/11/2011,"0.20","Boat",""
+07/11/2011,"0.20","Apple",""
+""")
+        self.assertTrue(importer.parse_file(self.account, csv_missing_b))
+        self.assertAllTransEqual(
+            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
+             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
+             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
+             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
+             (u"2011-11-07 00:00:00.000000.2", False, u"Doggy")])
+
+        csv_missing_a.seek(0)
+        self.assertTrue(importer.parse_file(self.account, csv_missing_a))
+        self.assertAllTransEqual(
+            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
+             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
+             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
+             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
+             (u"2011-11-07 00:00:00.000000.2", True, u"Doggy"),
+             (u"2011-11-07 00:00:00.000000.2", False, u"Cattle"),
+             (u"2011-11-07 00:00:00.000000.3", False, u"Doggy")])
+
+        csv_missing_b.seek(0)
+        self.assertTrue(importer.parse_file(self.account, csv_missing_b))
+        self.assertAllTransEqual(
+            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
+             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
+             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
+             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
+             (u"2011-11-07 00:00:00.000000.2", True, u"Doggy"),
              (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
              (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
              (u"2011-11-07 00:00:00.000000.2", False, u"Doggy")])
@@ -255,7 +307,7 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Apple",""
 """)
         importer = SimpleExampleImporter()
-        importer.parse_file(self.account, csv_missing_a)
+        self.assertTrue(importer.parse_file(self.account, csv_missing_a))
 
         self.assertAllTransEqual(
             [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
@@ -269,7 +321,7 @@ class CSVTestCase(djangotest.TestCase):
 08/11/2011,"0.20","Boat",""
 07/11/2011,"0.20","Apple",""
 """)
-        importer.parse_file(self.account, csv_missing_b)
+        self.assertTrue(importer.parse_file(self.account, csv_missing_b))
 
         self.assertAllTransEqual(
             [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
@@ -285,7 +337,7 @@ class CSVTestCase(djangotest.TestCase):
 12/11/2011,"0.20","Apple",""
 """)
         importer = SimpleExampleImporter()
-        importer.parse_file(self.account, csv_middle_addition_a)
+        self.assertTrue(importer.parse_file(self.account, csv_middle_addition_a))
 
         self.assertAllTransEqual(
             [(u"2011-11-12 00:00:00.000000.0", False, u"Apple"),
@@ -299,7 +351,7 @@ class CSVTestCase(djangotest.TestCase):
 12/11/2011,"0.20","Boat",""
 12/11/2011,"0.20","Apple",""
 """)
-        importer.parse_file(self.account, csv_middle_addition_b)
+        self.assertTrue(importer.parse_file(self.account, csv_middle_addition_b))
 
         self.assertAllTransEqual(
             [(u"2011-11-12 00:00:00.000000.0", False, u"Apple"),
@@ -315,7 +367,7 @@ class CSVTestCase(djangotest.TestCase):
 09/11/2011,"0.20","Apple",""
 """)
         importer = SimpleExampleImporter()
-        importer.parse_file(self.account, csv_middle_addition_a)
+        self.assertTrue(importer.parse_file(self.account, csv_middle_addition_a))
 
         self.assertAllTransEqual(
             [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
@@ -329,7 +381,7 @@ class CSVTestCase(djangotest.TestCase):
 10/11/2011,"0.20","Boat",""
 09/11/2011,"0.20","Apple",""
 """)
-        importer.parse_file(self.account, csv_middle_addition_b)
+        self.assertTrue(importer.parse_file(self.account, csv_middle_addition_b))
         self.assertAllTransEqual(
             [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
              (u"2011-11-10 00:00:00.000000.0", False, u"Boat"),

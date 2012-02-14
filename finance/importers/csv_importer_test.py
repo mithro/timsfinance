@@ -142,7 +142,7 @@ class CSVTestCase(djangotest.TestCase):
             last_import=datetime.datetime.now(),
             )
 
-    maxDiff=None
+    maxDiff = None
 
     def assertTransEqual(self, query, actual):
         self.assertListEqual(
@@ -203,19 +203,19 @@ class CSVTestCase(djangotest.TestCase):
 
     def test_duplicate(self):
         csv_duplicates = SIO.StringIO("""\
-16/11/2011,"-0.20","INTNL TRANSACTION FEE",""
-15/11/2011,"-0.20","INTNL TRANSACTION FEE",""
-15/11/2011,"-0.20","INTNL TRANSACTION FEE",""
-14/11/2011,"-0.20","INTNL TRANSACTION FEE",""
+16/11/2011,"-0.20","INTNL FEE",""
+15/11/2011,"-0.20","INTNL FEE",""
+15/11/2011,"-0.20","INTNL FEE",""
+14/11/2011,"-0.20","INTNL FEE",""
 """)
         importer = SimpleExampleImporter()
         self.assertTrue(importer.parse_file(self.account, csv_duplicates))
 
         self.assertAllTransEqual(
-            [(u"2011-11-14 00:00:00.000000.0", False, u"INTNL TRANSACTION FEE"),
-             (u"2011-11-15 00:00:00.000000.0", False, u"INTNL TRANSACTION FEE"),
-             (u"2011-11-15 00:00:00.000000.1", False, u"INTNL TRANSACTION FEE"),
-             (u"2011-11-16 00:00:00.000000.0", False, u"INTNL TRANSACTION FEE")])
+            [(u"2011-11-14 00:00:00.000000.0", False, u"INTNL FEE"),
+             (u"2011-11-15 00:00:00.000000.0", False, u"INTNL FEE"),
+             (u"2011-11-15 00:00:00.000000.1", False, u"INTNL FEE"),
+             (u"2011-11-16 00:00:00.000000.0", False, u"INTNL FEE")])
 
     def test_line_disappear_same_date(self):
         csv_missing_a = SIO.StringIO("""\
@@ -337,7 +337,8 @@ class CSVTestCase(djangotest.TestCase):
 12/11/2011,"0.20","Apple",""
 """)
         importer = SimpleExampleImporter()
-        self.assertTrue(importer.parse_file(self.account, csv_middle_addition_a))
+        self.assertTrue(importer.parse_file(
+            self.account, csv_middle_addition_a))
 
         self.assertAllTransEqual(
             [(u"2011-11-12 00:00:00.000000.0", False, u"Apple"),
@@ -351,7 +352,8 @@ class CSVTestCase(djangotest.TestCase):
 12/11/2011,"0.20","Boat",""
 12/11/2011,"0.20","Apple",""
 """)
-        self.assertTrue(importer.parse_file(self.account, csv_middle_addition_b))
+        self.assertTrue(importer.parse_file(
+            self.account, csv_middle_addition_b))
 
         self.assertAllTransEqual(
             [(u"2011-11-12 00:00:00.000000.0", False, u"Apple"),

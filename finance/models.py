@@ -317,10 +317,17 @@ class Transaction(models.Model):
     will populate the imported_* fields. Some of the fields can be manually
     overriden by the user.
     """
+    # A transaction can be uniquely identified by these three attributes
     account = models.ForeignKey('Account')
+    trans_id = models.CharField(max_length=200) # See csv.py for a description of Transaction ID.
+    removed_by = models.ForeignKey('Imported', null=True, blank=True)
 
-    # See csv.py for a description of Transaction ID.
-    trans_id = models.CharField(max_length=200)
+    # Details about the import which added this transaction.
+    imported_first_by = models.ForeignKey('Imported', related_name='new_transactions')
+    imported_also_by = models.ManyToManyField('Imported', related_name='common_transactions')
+    imported_fields = models.TextField()
+
+    # Is this a sub transaction?
     parent_id = models.ForeignKey('self', related_name='children', null=True, blank=True)
 
     # How to track the running total.
@@ -446,7 +453,7 @@ class Transaction(models.Model):
             )
 
     class Meta:
-        unique_together = (("account", "trans_id"))
+        unique_together = (("account", "trans_id", "removed_by"))
         get_latest_by = "imported_entered_date"
         ordering = ["-imported_entered_date", "-imported_effective_date"]
 

@@ -53,6 +53,7 @@ import difflib
 import re
 import warnings
 
+import django.core.exceptions
 from django.db import transaction
 
 from finance import models
@@ -70,61 +71,65 @@ def csv_changes(order, old_data, new_data):
     changes from the new file.
 
     Returns:
+        common: List of rows that where common between both data sets.
         deletes: List of rows that need to be rolled back before the
             inserts can be applied.
-            (These are in the correct order needed to rollback, IE latest
-            first.)
         inserts: List of rows that need to added to the database.
-            (These are in the correct order needed to insert, IE earlier
-            first.)
     """
-    old_lines = list(order(old_data.split('\n')))
-    new_lines = list(order(new_data.split('\n')))
+    old_lines = list(order(
+        list(x for x in old_data.split('\n') if len(x) > 0)))
+    new_lines = list(order(
+        list(x for x in new_data.split('\n') if len(x) > 0)))
 
     differ = difflib.SequenceMatcher(None, old_lines, new_lines)
 
-    common = differ.find_longest_match(0, -1, 0, -1)
-    if common.size == 0:
-        warnings.warn(
-            "No common lines found between imports," +
-                " assuming all lines are new.",
-            NoCommonLines)
-
     line_changes = differ.get_opcodes()
-    while len(line_changes) > 0:
-        tag, old_start, old_end, new_start, new_end = line_changes[0]
-        if old_end <= common.a or new_start <= common.b:
-            # Make sure that everything before the common section is just
-            # deletes or equals, no inserts.
-            assert line_changes[0][0] in ("delete", "equal")
-            line_changes.pop(0)
-            continue
-        break
 
-    deletes = []
-    inserts = []
-    for tag, old_start, old_end, new_start, new_end in line_changes:
-        if tag == "equal":
-            for i in range(old_start, old_end):
-                deletes.append(old_lines[i])
+    # Valid diffs look like the following
+    # delete
+    # equal
+    # (insert|delete|equal)
+    # This loop should skip to the bracketed section
+    while len(line_changes) > 1 and line_changes[0][0] == "delete":
+        line_changes.pop(0)
 
+    equals = []
+    while len(line_changes) > 0 and line_changes[0][0] == "equal":
+        tag, old_start, old_end, new_start, new_end = line_changes.pop(0)
+        for old_i, new_i in zip(
+                range(old_start, old_end), range(new_start, new_end)):
+            assert old_lines[old_i] == new_lines[new_i]
+            equals.append(new_lines[new_i])
+
+    deletes = []  # Transactions which have been removed.
+    inserts = []  # Transactions which have been added.
     for tag, old_start, old_end, new_start, new_end in line_changes:
-        if tag in ("delete", "replace"):
+        if tag in ("delete", "replace", "equal"):
             for i in range(old_start, old_end):
                 deletes.append(old_lines[i])
         if tag in ("insert", "replace", "equal"):
             for i in range(new_start, new_end):
                 inserts.append(new_lines[i])
 
-    return list(reversed(deletes)), inserts
+    # Santity checks
+    old_ending = equals+deletes
+    assert old_lines[-len(old_ending):] == old_ending, \
+        "%s != %s" % (old_lines[-len(old_ending):], old_ending)
+
+    new_ending = equals+inserts
+    assert new_lines == new_ending, \
+        "%s != %s" % (new_lines, new_ending)
+
+    return equals, deletes, inserts
 
 class FieldList(object):
     """Maps field values from CSV output to field names in the description."""
 
     def __init__(self, fields_desc, fields_value, datefmt):
         assert len(fields_desc) == len(fields_value), \
-            "len(fields_desc) %i != len(fields_value) %i" % (
-                len(fields_desc), len(fields_value))
+            "len(fields_desc) %i != len(fields_value) %i\n%r, %r" % (
+                len(fields_desc), len(fields_value),
+                fields_desc, fields_value)
 
         self.fields_desc = fields_desc
 
@@ -180,6 +185,17 @@ class FieldList(object):
             if field_name.startswith("__"):
                 continue
             setattr(trans, field_name, getattr(self, field_name))
+
+    def __str__(self):
+        l = []
+        for field_name in self.fields_desc:
+            if field_name is None:
+                l.append(tuple())
+            elif field_name.startswith("__"):
+                l.append((field_name, None))
+            else:
+                l.append((field_name, getattr(self, field_name)))
+        return str(l)
 
 
 class CSVImporter(object):
@@ -263,64 +279,101 @@ ORDER = reversed     -> Order is newest first.
         except IndexError:
             old_data = ""
 
-        delete_lines, insert_lines = csv_changes(self.ORDER, old_data, new_data)
+        common_lines, delete_lines, insert_lines = csv_changes(self.ORDER, old_data, new_data)
 
         # If there are no lines to insert, assume this import was a dud...
         if len(insert_lines) == 0:
-            return
+            return []
 
-        models.Imported.objects.create(
+        imported = models.Imported.objects.create(
             account=account,
             content=new_data)
 
-        # Mark any transaction which has disappeared as deleted
-        for fields in csv.reader(delete_lines):
-            field_list = FieldList(self.FIELDS, fields, self.DATEFMT)
-            self.delete_trans(account, field_list)
+        def annotate(lines):
+            count = None
+            previous_entered_date = None
+            for fields in csv.reader(lines):
+                field_list = FieldList(self.FIELDS, fields, self.DATEFMT)
+                if field_list.imported_entered_date != previous_entered_date:
+                    previous_entered_date = field_list.imported_entered_date
+                    count = self.date_count_query(account, field_list)
+                count -= 1
+                yield (count, fields, field_list)
+
+        # Roll back the following transactions as they have disapeared in the import
+        # We walk backwards rolling back the newest first
+        for i, fields, field_list in annotate(reversed(delete_lines)):
+
+            # Find the transaction to rollback
+            trans_id = field_list.trans_id(i)
+            try:
+                trans = models.Transaction.objects.get(
+                    account=account, trans_id=trans_id, removed_by=None)
+            except django.core.exceptions.ObjectDoesNotExist:
+                assert False, (
+                    "During rollback, could not find transaction.\n"
+                    "%s %s\n%s\n" % (account, trans_id, fields))
+
+            assert trans.imported_fields == repr(fields), (
+                "When rolling back"
+                " the found transaction's imported_fields don't match\n"
+                "(trans) %s != (rollback) %s\n%s %s" % (trans.imported_fields, repr(fields), account, trans_id))
+
+            # Mark the transaction as deleted
+            trans.removed_by = imported
+            trans.save()
+
+        # Mark these as also imported by this
+        # Again we walk backwards as there might be many transactions for a
+        # day, but only a given number ended up being common between imports.
+        for i, fields, field_list in annotate(reversed(common_lines)):
+
+            trans_id = field_list.trans_id(i)
+            try:
+                trans = models.Transaction.objects.get(
+                    account=account, trans_id=trans_id, removed_by=None)
+            except django.core.exceptions.ObjectDoesNotExist:
+                assert False, (
+                    "When checking common, could not find transaction.\n"
+                    "%s %s\n%s\n" % (account, trans_id, fields))
+
+            assert trans.imported_fields == repr(fields), (
+                "When checking common"
+                " the found transaction's imported_fields don't match\n"
+                "%s != %s" % (trans.imported_fields, repr(fields)))
+            trans.imported_also_by.add(imported)
+            trans.save()
 
         # Create any new transactions which have appeared
         for fields in csv.reader(insert_lines):
             field_list = FieldList(self.FIELDS, fields, self.DATEFMT)
-            self.insert_trans(account, field_list)
+
+            date_count = self.date_count_query(account, field_list)
+
+            trans = models.Transaction()
+            # Unique key
+            trans.account = account
+            trans.trans_id = field_list.trans_id(date_count)
+            trans.removed_by = None
+
+            # Information about this import
+            trans.imported_first_by = imported
+            trans.imported_fields = repr(fields)
+
+            # Set the fields from the CSV
+            field_list.set(trans)
+
+            # Run any module specific transforms.
+            if self.filter(field_list, trans):
+                # Mark the transaction as active
+                trans.state = "Active"
+                # Save the transaction
+                trans.save()
 
     def date_count_query(self, account, field_list):
         return models.Transaction.objects.all(
             ).filter(account=account
             ).filter(imported_entered_date=field_list.imported_entered_date
-            ).exclude(trans_id__endswith=".deleted"
+            ).filter(removed_by=None  # Don't count transactions which have been removed
+            ).filter(parent_id=None  # Don't count sub-transactions
             ).count()
-
-    def delete_trans(self, account, field_list):
-        date_count = self.date_count_query(account, field_list) - 1
-        trans_id = field_list.trans_id(date_count)
-
-        # Get the existing transaction
-        trans = models.Transaction.objects.get(
-            account=account, trans_id=trans_id)
-
-        # Mark the transaction as deleted
-        trans.trans_id += ".deleted"
-        # Save the transaction
-        trans.save()
-
-    def insert_trans(self, account, field_list):
-        date_count = self.date_count_query(account, field_list)
-        trans_id = field_list.trans_id(date_count)
-
-        # Try and find an existing transaction, or create a new one
-        try:
-            trans = models.Transaction.objects.get(
-                account=account, trans_id=trans_id)
-        except models.Transaction.DoesNotExist:
-            trans = models.Transaction()
-            trans.account=account
-            trans.trans_id=trans_id
-
-        field_list.set(trans)
-
-        # Run any module specific transforms.
-        if self.filter(field_list, trans):
-            # Mark the transaction as active
-            trans.state = "Active"
-            # Save the transaction
-            trans.save()

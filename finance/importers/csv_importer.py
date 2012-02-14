@@ -158,6 +158,8 @@ class FieldList(object):
 
             # Convert amount to an int
             elif field_name.endswith("_amount"):
+                assert re.sub('[^0-9.]', '', field_value)[-3] == '.', \
+                    "Amount %s was does not have two decimal places." % field_value
                 field_value = re.sub('[^0-9]', '', field_value)
                 setattr(self, field_name, int(field_value))
 
@@ -175,8 +177,11 @@ class FieldList(object):
         """Create the transaction id.
 
         Needs the date_count if no UNIQUE_ID existing.
-        FIXME(mithro): This is really kudgy but can't figure out a better
-            solution at the moment.
+
+        Args:
+            date_count is the number of transactions on a given day.
+                FIXME(mithro): This is really kudgy but can't figure out a
+                better solution at the moment.
         """
         # Get the entered_date information
         if hasattr(self, self.UNIQUE_ID):
@@ -216,7 +221,7 @@ class CSVImporter(object):
     ###########################################################################
     FIELDS = None
     FIELDS__doc__ = """\
-A list of CSVImporter.fields values describing the order of fields in the CSV
+A list of FieldList.fields values describing the order of fields in the CSV
 file.
 """
     DATEFMT = None

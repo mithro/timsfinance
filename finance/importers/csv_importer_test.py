@@ -5,7 +5,6 @@
 import datetime
 import cStringIO as SIO
 
-#from django import unittest as unittest2
 from django import test as djangotest
 
 from finance import models

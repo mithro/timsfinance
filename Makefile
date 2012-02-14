@@ -62,7 +62,7 @@ git-cl-config: install
 	$(ACTIVATE) && git-cl config file://$$PWD/.codereview.settings
 
 upload: git-cl-config
-	$(ACTIVATE) && git-cl upload
+	$(ACTIVATE) && git-cl upload master
 
 lint: install
 	@# R0904 - Disable "Too many public methods" warning

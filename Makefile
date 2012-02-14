@@ -85,7 +85,7 @@ lint: install
 reset-sql:
 	python manage.py sqlclear finance | sqlite3 finance.sqlite3; python manage.py syncdb
 
-test:
+test: install
 	python manage.py test
 
 .PHONY: lint reset-sql test

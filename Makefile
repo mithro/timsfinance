@@ -64,11 +64,13 @@ git-cl-config: install
 upload: git-cl-config
 	$(ACTIVATE) && git-cl upload master
 
+ifeq ($(FILES), "")
+FILES=$(SOURCES)
+endif 
 lint: install
 	@# R0904 - Disable "Too many public methods" warning
-	@# W0221 - Disable "Arguments differ from parent", as get and post will.
-	@# E1103 - Disable "Instance of 'x' has no 'y' member (but some types could not be inferred)"
 	@# I0011 - Disable "Locally disabling 'xxxx'"
+	@# --generated-members=objects -- For django's model objects
 	$(ACTIVATE) && python \
 		-W "ignore:disable-msg is:DeprecationWarning:pylint.lint" \
 		-c "import sys; from pylint import lint; lint.Run(sys.argv[1:])" \
@@ -76,11 +78,10 @@ lint: install
 		--include-ids=y \
 		--no-docstring-rgx "(__.*__)|(get)|(post)|(main)" \
 		--indent-string='    ' \
-		--disable=W0221 \
 		--disable=R0904 \
-		--disable=E1103 \
 		--disable=I0011 \
-		--const-rgx='[a-z_][a-z0-9_]{2,30}$$' ${SOURCE} 2>&1 | grep -v 'maximum recursion depth exceeded'
+		--generated-members=objects \
+		--const-rgx='[a-z_][a-z0-9_]{2,30}$$' $(FILES) 2>&1 | grep -v 'maximum recursion depth exceeded'
 
 reset-sql:
 	python manage.py sqlclear finance | sqlite3 finance.sqlite3; python manage.py syncdb

@@ -203,7 +203,7 @@ class Imported(models.Model):
     # Account this file was imported into
     account = models.ForeignKey('Account')
     # Time/date thie file was imported
-    date = models.DateTimeField('date', auto_now_add=True)
+    at = models.DateTimeField('date', auto_now_add=True)
     # File contents
     content = models.TextField()
 
@@ -331,7 +331,7 @@ class Transaction(models.Model):
     parent_id = models.ForeignKey('self', related_name='children', null=True, blank=True)
 
     # How to track the running total.
-    reconciliation = models.ForeignKey('Reconciliation', null=True, blank=True)
+    reconciliation = models.ForeignKey('Reconciliation', related_name="transactions", null=True, blank=True)
 
     # These are the values imported
     imported_effective_date = models.DateTimeField('effective date', null=True, blank=True)
@@ -478,12 +478,23 @@ class TransactionAdmin(admin.ModelAdmin):
 class Reconciliation(models.Model):
     """Reconciliations are a way to track the balance of an account."""
 
+    # Account this reconcilation is for.
     account = models.ForeignKey('Account')
-    reconcile_id = models.AutoField(primary_key=True)
-    previous_id = models.ForeignKey('self', null=True, blank=True)
+    # The previous reconcilation for this account. For the first one this will be blank.
+    previous = models.ForeignKey('self', null=True, blank=True)
+    # The value of the account at this reconcilation.
+    amount = models.IntegerField()
+    # The time which this reconciliation actually happened.
+    at = models.DateTimeField('date')
+    # The import which caused this reconcilation to be created
+    imported_by = models.ForeignKey('Imported', null=True, blank=True)
 
-    date = models.DateTimeField('date', auto_now_add=True)
+    def __unicode__(self):
+        return "%s %s" % (self.at,  dollar_fmt(
+            self.amount, currency=self.account.currency.symbol))
 
+    class Meta:
+        order_with_respect_to = 'account'
 
 ###############################################################################
 

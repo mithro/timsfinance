@@ -9,7 +9,8 @@ Most sites support exporting data as CSV. This base imports a bunch of CSV
 formats.
 
 We want to come up with an ID which as some given properties;
- * Changes in transactions on one day do not ripple through the system.
+ * Changes in transactions on one day do effect transactions on another day (IE
+   not ripple through the system).
  * Multiple imports of the CSV do not duplicate the transactions.
  * Imports of two different CSVs which have overlapping data does not duplicate
    transactions.
@@ -56,6 +57,7 @@ import django.core.exceptions
 from django.db import transaction
 
 from finance import models
+from finance.utils import dollar_fmt
 
 
 class NoCommonLines(Warning):
@@ -156,22 +158,25 @@ class FieldList(object):
 
             # Convert dates into datetime objects
             if field_name.endswith("_date"):
-                field_value = datetime.datetime.strptime(field_value, datefmt)
+                if field_value:
+                    field_value = datetime.datetime.strptime(field_value, datefmt)
+                else:
+                    field_value = None
                 setattr(self, field_name, field_value)
 
             # Convert amount to an int
-            elif field_name.endswith("_amount"):
-                assert re.sub('[^0-9.]', '', field_value)[-3] == '.', \
-                    "Amount %s was does not have two decimal places." % \
-                    field_value
-                field_value = re.sub('[^0-9]', '', field_value)
+            elif field_name.endswith("_amount") or field_name.startswith("__running_total_"):
+                field_value = re.sub('[^0-9.-]', '', field_value)
+
+                # Negative only allow at front
+                assert field_value.find('-') in (-1, 0)
+
+                decimal_point = field_value.split('.')
+                if len(decimal_point) == 1:
+                    decimal_point.append("00")
+
+                field_value = "".join(decimal_point)
                 setattr(self, field_name, int(field_value))
-
-            elif field_name == "__running_total_inc":
-                raise NotImplementedError()
-
-            elif field_name == "__running_total_inc":
-                raise NotImplementedError()
 
             # Just set it.
             else:
@@ -198,6 +203,20 @@ class FieldList(object):
             return "%s.%s" % (
                 self.imported_entered_date.strftime("%Y-%m-%d %H:%M:%S.%f"),
                 date_count)
+
+    def reconcile(self, date_count):
+        if hasattr(self, "__running_total_inc"):
+            reconcile = models.Reconciliation()
+
+            assert self.imported_entered_date.microsecond == 0
+            reconcile.at = self.imported_entered_date.replace(
+                microsecond=date_count)
+
+            reconcile.amount = getattr(self, "__running_total_inc")
+            return reconcile
+        if hasattr(self, "__running_total_exc"):
+            raise NotImplementedError
+
 
     def set(self, trans):
         """Copy data from ourselves into the transaction."""
@@ -270,7 +289,7 @@ ORDER = reversed     -> Order is newest first.
         try:
             old_data_query = models.Imported.objects.all(
                 ).filter(account=account
-                ).order_by('-date')
+                ).order_by('-at')
 
             old_data_obj = old_data_query[0]
             old_data = old_data_obj.content
@@ -282,7 +301,7 @@ ORDER = reversed     -> Order is newest first.
 
         # If there are no lines to insert, assume this import was a dud.
         if len(insert_lines) == 0:
-            return False
+            return []
 
         imported = models.Imported.objects.create(
             account=account,
@@ -357,6 +376,7 @@ ORDER = reversed     -> Order is newest first.
             trans.save()
 
         # Create any new transactions which have appeared
+        inserted_trans = []
         for fields in csv.reader(insert_lines):
             field_list = FieldList(self.FIELDS, fields, self.DATEFMT)
 
@@ -376,6 +396,26 @@ ORDER = reversed     -> Order is newest first.
             # Set the fields from the CSV
             field_list.set(trans)
 
+            # If they have running totals, we need to do a reconcile
+            reconcile = field_list.reconcile(date_count)
+            if reconcile:
+                reconcile.account = account
+                reconcile.imported_by = imported
+
+                previous_reconcile_id = account.get_reconciliation_order()[-1]
+                previous_reconcile = models.Reconciliation.objects.get(
+                    id=previous_reconcile_id)
+
+                assert previous_reconcile.amount + trans.imported_amount == reconcile.amount, \
+                    "%s + %s != %s\nShould be: %s difference: %s" % (
+                        previous_reconcile, trans, reconcile,
+                        dollar_fmt(previous_reconcile.amount+trans.imported_amount, account.currency.symbol),
+                        dollar_fmt(previous_reconcile.amount+trans.imported_amount-reconcile.amount, account.currency.symbol),
+                        )
+
+                reconcile.save()
+                trans.reconciliation = reconcile
+
             # Run any module specific transforms.
             if self.filter(field_list, trans):
                 # Mark the transaction as active
@@ -383,7 +423,9 @@ ORDER = reversed     -> Order is newest first.
                 # Save the transaction
                 trans.save()
 
-        return True
+                inserted_trans.append(trans.id)
+
+        return inserted_trans
 
     def date_count_query(self, account, entered_date):
         """Get the number of transactions on a given day."""

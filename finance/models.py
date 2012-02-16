@@ -140,8 +140,6 @@ class Site(models.Model):
     # The python class name for the tool which imports
     importer = models.CharField(max_length=200)
     image = models.URLField(max_length=1000)
-    # Latest import time that occured
-    last_import = models.DateTimeField('last import')
 
     def __unicode__(self):
         return self.site_id
@@ -197,6 +195,18 @@ SiteAdmin.inlines.append(AccountInline)
 class AccountAdmin(admin.ModelAdmin):
     list_display = ('site', 'account_id', 'sql_id', 'description', 'currency', 'current_balance')
     list_filter = ('site',)
+
+###############################################################################
+
+class Imported(models.Model):
+    """File contents which has been imported."""
+    # Account this file was imported into
+    account = models.ForeignKey('Account')
+    # Time/date thie file was imported
+    date = models.DateTimeField('date', auto_now_add=True)
+    # File contents
+    content = models.TextField()
+
 
 ###############################################################################
 
@@ -314,7 +324,7 @@ class Transaction(models.Model):
     parent_id = models.ManyToManyField('self', related_name="subtransactions", symmetrical=False)
 
     # How to track the running total.
-    reconciliation_id = models.ForeignKey('Reconciliation')
+    reconciliation = models.ForeignKey('Reconciliation', null=True, blank=True)
 
     # These are the values imported from the site
     imported_effective_date = models.DateTimeField('effective date', null=True, blank=True)

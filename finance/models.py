@@ -321,12 +321,12 @@ class Transaction(models.Model):
 
     # See csv.py for a description of Transaction ID.
     trans_id = models.CharField(max_length=200)
-    parent_id = models.ManyToManyField('self', related_name="subtransactions", symmetrical=False)
+    parent_id = models.ForeignKey('self', related_name='children', null=True, blank=True)
 
     # How to track the running total.
     reconciliation = models.ForeignKey('Reconciliation', null=True, blank=True)
 
-    # These are the values imported from the site
+    # These are the values imported
     imported_effective_date = models.DateTimeField('effective date', null=True, blank=True)
     imported_entered_date = models.DateTimeField('entered date')
     imported_description = models.CharField(max_length=200)
@@ -434,13 +434,12 @@ class Transaction(models.Model):
         return location
 
     def __unicode__(self):
-        if self.parent_id:
-            name = "SubTrans"
-        else:
-            name = "Trans"
+        if self.parent_id is not None:
+            extra = "(sub)"
+        extra = ""
 
-        return "%s<%s %s>" % (
-            name,
+        return "%s%s %s" % (
+            extra,
             self.description,
             dollar_fmt(self.imported_amount,
                        currency=self.account.currency.symbol),

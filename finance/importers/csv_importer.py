@@ -59,6 +59,7 @@ from finance import models
 
 
 class NoCommonLines(Warning):
+    """No common lines between old CSV file and new CSV file."""
     pass
 
 
@@ -91,8 +92,8 @@ def csv_changes(order, old_data, new_data):
 
     line_changes = differ.get_opcodes()
     while len(line_changes) > 0:
-        tag, i1, i2, j1, j2 = line_changes[0]
-        if i2 <= common.a or j1 <= common.b:
+        tag, old_start, old_end, new_start, new_end = line_changes[0]
+        if old_end <= common.a or new_start <= common.b:
             # Make sure that everything before the common section is just
             # deletes or equals, no inserts.
             assert line_changes[0][0] in ("delete", "equal")
@@ -102,114 +103,216 @@ def csv_changes(order, old_data, new_data):
 
     deletes = []
     inserts = []
-    for tag, i1, i2, j1, j2 in line_changes:
+    for tag, old_start, old_end, new_start, new_end in line_changes:
         if tag == "equal":
-            for i in range(i1, i2):
-                deletes.append(('delete', old_lines[i]))
+            for i in range(old_start, old_end):
+                deletes.append(old_lines[i])
 
-    for tag, i1, i2, j1, j2 in line_changes:
+    for tag, old_start, old_end, new_start, new_end in line_changes:
         if tag in ("delete", "replace"):
-            for i in range(i1, i2):
-                deletes.append(('delete', old_lines[i]))
+            for i in range(old_start, old_end):
+                deletes.append(old_lines[i])
         if tag in ("insert", "replace", "equal"):
-            for i in range(j1, j2):
-                inserts.append(('insert', new_lines[i]))
+            for i in range(new_start, new_end):
+                inserts.append(new_lines[i])
 
     return list(reversed(deletes)), inserts
 
+class FieldList(object):
+    """Maps field values from CSV output to field names in the description."""
+
+    def __init__(self, fields_desc, fields_value, datefmt):
+        assert len(fields_desc) == len(fields_value), \
+            "len(fields_desc) %i != len(fields_value) %i" % (
+                len(fields_desc), len(fields_value))
+
+        self.fields_desc = fields_desc
+
+        assert CSVImporter.Fields.ENTERED_DATE in fields_desc, \
+            "Entered date is a required field, please fix the importer."
+
+        for field_name, field_value in zip(fields_desc, fields_value):
+            if field_name is None:
+                continue
+
+            # Convert dates into datetime objects
+            if field_name.endswith("_date"):
+                field_value = datetime.datetime.strptime(field_value, datefmt)
+                setattr(self, field_name, field_value)
+
+            # Convert amount to an int
+            elif field_name.endswith("_amount"):
+                field_value = re.sub('[^0-9]', '', field_value)
+                setattr(self, field_name, int(field_value))
+
+            elif field_name == "__running_total_inc":
+                raise NotImplementedError()
+
+            elif field_name == "__running_total_inc":
+                raise NotImplementedError()
+
+            # Just set it.
+            else:
+                setattr(self, field_name, field_value)
+
+    def trans_id(self, date_count):
+        """Create the transaction id.
+
+        Needs the date_count if no UNIQUE_ID existing.
+        FIXME(mithro): This is really kudgy but can't figure out a better
+            solution at the moment.
+        """
+        # Get the entered_date information
+        if hasattr(self, CSVImporter.Fields.UNIQUE_ID):
+            # Get a unique ID for this transaction.
+            return getattr(self, CSVImporter.Fields.UNIQUE_ID)
+        else:
+            # No unique ID, we have to generate a unique ID.
+            return "%s.%s" % (
+                self.imported_entered_date.strftime("%Y-%m-%d %H:%M:%S.%f"),
+                date_count)
+
+    def set(self, trans):
+        """Copy data from ourselves into the transaction."""
+        for field_name in self.fields_desc:
+            if field_name is None:
+                continue
+            if field_name.startswith("__"):
+                continue
+            setattr(trans, field_name, getattr(self, field_name))
+
 
 class CSVImporter(object):
+    """Base class for importers which import from .csv files."""
 
-    UNIQUE_ID = '__unique_id'
-    DATE = 'imported_entered_date'
-    EFFECTIVE_DATE = 'imported_effective_date'
-    ENTERED_DATE = 'imported_entered_date'
-    DESCRIPTION = 'imported_description'
-    AMOUNT = '__amount'
-    # Running total *includes* the line being processed transaction
-    RUNNING_TOTAL_INC = '__running_total_inc'
-    # Running total *excludes* the line being processed transaction
-    RUNNING_TOTAL_EXC = '__running_total_exc'
+    class Fields(object):
+        """Fields which can be imported."""
+        def __init__(self):
+            raise SyntaxError('Holder object, do not construct!')
+
+        UNIQUE_ID = '__unique_id'
+        DATE = 'imported_entered_date'
+        EFFECTIVE_DATE = 'imported_effective_date'
+        ENTERED_DATE = 'imported_entered_date'
+        DESCRIPTION = 'imported_description'
+        AMOUNT = 'imported_amount'
+        # Running total *includes* the line being processed transaction
+        RUNNING_TOTAL_INC = '__running_total_inc'
+        # Running total *excludes* the line being processed transaction
+        RUNNING_TOTAL_EXC = '__running_total_exc'
+
+    # Override these attributes
+    ###########################################################################
+    FIELDS = None
+    FIELDS__doc__ = """\
+A list of CSVImporter.fields values describing the order of fields in the CSV
+file.
+"""
+    DATEFMT = None
+    DATEFMT__doc__ = """\
+Format for dates found in the CSV file.
+"""
+    ORDER = lambda x: x
+    ORDER__doc__ = """\
+Function which changes the order in which the transactions are stored to be
+oldest first.
+
+ORDER = lambda x: x  -> Order is already oldest first.
+ORDER = reversed     -> Order is newest first.
+"""
 
     def filter(self, fields, trans):
-        pass
+        """Extra filtering that may be needed for the CSV file.
+
+        Args:
+            field_list: A FieldList class.
+            trans: The populated transaction.
+
+        Returns:
+            Boolean, False will cause the transaction not to be saved.
+        """
+        return True
+
+    ###########################################################################
+
 
     @transaction.commit_on_success
     def parse_file(self, account, handle):
-        FIELDS = self.FIELDS
-        DATEFMT = self.DATEFMT
-
         # ENTERED_DATE is a required field in the CSV
-        assert self.ENTERED_DATE in FIELDS
+        assert self.Fields.ENTERED_DATE in self.FIELDS
 
-        # Step one, we need to find if there is any overlap with previous imports
+        # Step one, we need to find if there is any overlap with previous
+        # imports
         new_data = handle.read()
-        old_data_query = models.Imported.objects.all()
-        old_data_query = old_data_query.filter(account=account)
-        old_data_query = old_data_query.order_by('date')
 
         try:
+            old_data_query = models.Imported.objects.all(
+                ).filter(account=account
+                ).order_by('date')
+
             old_data_obj = old_data_query[0]
             old_data = old_data_obj.content
         except IndexError:
             old_data = ""
 
-        merged_data = self.only_new_lines(old_data, new_data)
-        lines = self.ORDER(list(csv.reader(StringIO.StringIO(merged_data))))
+        delete_lines, insert_lines = csv_changes(self.ORDER, old_data, new_data)
 
-        date_counts = {}
-        for fields in []:
-            # Get the entered_date information
-            entered_date = fields[FIELDS.index(self.ENTERED_DATE)]
-            entered_date_dt = datetime.datetime.strptime(entered_date, DATEFMT)
+        # If there are no lines to insert, assume this import was a dud...
+        if len(insert_lines) == 0:
+            return
 
-            try:
-                # Get a unique ID for this transaction.
-                id_index = FIELDS.index(self.UNIQUE_ID)
-                trans_id = fields[id_index]
-            except ValueError:
-                # No unique ID, we have to generate a unique ID.
-                date_count = date_counts.get(entered_date_dt, 0)
-                date_counts[entered_date] = date_count + 1
+        models.Imported.objects.create(
+            account=account,
+            content=new_data)
 
-                trans_id = "%s.%s" % (entered_date_dt.strftime("%Y%m%d%H%M%S.%f"), date_count)
+        # Mark any transaction which has disappeared as deleted
+        for fields in csv.reader(delete_lines):
+            field_list = FieldList(self.FIELDS, fields, self.DATEFMT)
+            self.delete_trans(account, field_list)
 
-            # Try and find an existing transaction, or create a new one
-            try:
-                trans = models.Transaction.objects.get(account=account, trans_id=trans_id)
-            except models.Transaction.DoesNotExist:
-                trans = models.Transaction(account=account, trans_id=trans_id)
+        # Create any new transactions which have appeared
+        for fields in csv.reader(insert_lines):
+            field_list = FieldList(self.FIELDS, fields, self.DATEFMT)
+            self.insert_trans(account, field_list)
 
-            # Set the fields on the transactions
-            for field_index, field_name in enumerate(FIELDS):
-                if not field_name:
-                    continue
+    def date_count_query(self, account, field_list):
+        return models.Transaction.objects.all(
+            ).filter(account=account
+            ).filter(imported_entered_date=field_list.imported_entered_date
+            ).exclude(trans_id__endswith=".deleted"
+            ).count()
 
-                field_value = fields[field_index]
+    def delete_trans(self, account, field_list):
+        date_count = self.date_count_query(account, field_list) - 1
+        trans_id = field_list.trans_id(date_count)
 
-                # Just a basic set
-                if not field_name.startswith("__"):
-                    if field_name.endswith("date"):
-                        field_value = datetime.datetime.strptime(entered_date, DATEFMT)
+        # Get the existing transaction
+        trans = models.Transaction.objects.get(
+            account=account, trans_id=trans_id)
 
-                    setattr(trans, field_name, field_value)
+        # Mark the transaction as deleted
+        trans.trans_id += ".deleted"
+        # Save the transaction
+        trans.save()
 
-                # We have running totals, so we can do the reconcilation per transaction.
-                elif field_name == "__amount":
-                    field_value = re.sub('[^0-9]', '', field_value)
-                    trans.imported_amount = int(field_value)
+    def insert_trans(self, account, field_list):
+        date_count = self.date_count_query(account, field_list)
+        trans_id = field_list.trans_id(date_count)
 
-                elif field_name == "__running_total_inc":
-                    if trans.reconcile is None:
-                        reconcile = models.Reconciliation(
-                            date = entered_date,
-                            previous_id = previous_reconciliation,
-                            )
-                        reconcile.save()
-                        trans.reconcile = reconcile
-                elif field_name == "__running_total_inc":
-                    raise NotImplemented()
+        # Try and find an existing transaction, or create a new one
+        try:
+            trans = models.Transaction.objects.get(
+                account=account, trans_id=trans_id)
+        except models.Transaction.DoesNotExist:
+            trans = models.Transaction()
+            trans.account=account
+            trans.trans_id=trans_id
 
-            # Run any module specific transforms.
-            self.filter(fields, trans)
+        field_list.set(trans)
+
+        # Run any module specific transforms.
+        if self.filter(field_list, trans):
+            # Mark the transaction as active
+            trans.state = "Active"
+            # Save the transaction
             trans.save()

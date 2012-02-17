@@ -161,6 +161,17 @@ class CSVTestCase(djangotest.TestCase):
             models.Transaction.objects.all().order_by("id"),
             actual)
 
+    def assertReconcileEqual(self, query, actual):
+        self.assertListEqual(
+            list(tuple(unicode(reconcile).rsplit(" ", 1))
+                 for reconcile in query),
+            actual)
+
+    def assertAllReconcileEqual(self, actual):
+        self.assertReconcileEqual(
+            models.Reconciliation.objects.all().order_by("at"),
+            actual)
+
     def test_unique(self):
         # Test csv which has a unique identifer....
         pass
@@ -426,11 +437,11 @@ class CSVTestCase(djangotest.TestCase):
             [(u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE"),
              (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY"),
              (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT BPAY")])
-
-        print
-        for reconcile in models.Reconciliation.objects.all().order_by("at"):
-            print reconcile
-        print
+        self.assertAllReconcileEqual(
+            [(u"1970-01-01 10:00:00", u"$+22,671.98"),
+             (u"2012-01-31 00:00:00", u"$+22,671.48"),
+             (u"2012-02-01 00:00:00", u"$+22,671.78"),
+             (u"2012-02-01 00:00:00.000001", u"$+22,672.08")])
 
         csv_normal2 = SIO.StringIO("""\
 ,01/02/2012,REWARD BENEFIT VISA (OS),0.10,22672.33
@@ -446,11 +457,13 @@ class CSVTestCase(djangotest.TestCase):
              (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT BPAY"),
              (u"2012-02-01 00:00:00.000000.2", False, u"REWARD BENEFIT VISA (LOCAL)"),
              (u"2012-02-01 00:00:00.000000.3", False, u"REWARD BENEFIT VISA (OS)")])
-
-        print
-        for reconcile in models.Reconciliation.objects.all().order_by("at"):
-            print reconcile
-        print
+        self.assertAllReconcileEqual(
+            [(u"1970-01-01 10:00:00", u"$+22,671.98"),
+             (u"2012-01-31 00:00:00", u"$+22,671.48"),
+             (u"2012-02-01 00:00:00", u"$+22,671.78"),
+             (u"2012-02-01 00:00:00.000001", u"$+22,672.08"),
+             (u"2012-02-01 00:00:00.000002", u"$+22,672.23"),
+             (u"2012-02-01 00:00:00.000003", u"$+22,672.33")])
 
     def test_running_normal(self):
         importer = RunningExampleImporter()
@@ -472,8 +485,12 @@ class CSVTestCase(djangotest.TestCase):
              (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY"),
              (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT VISA (LOCAL)"),
              (u"2012-02-01 00:00:00.000000.2", False, u"REWARD BENEFIT VISA (OS)")])
-
-
+        self.assertAllReconcileEqual(
+            [(u"1970-01-01 10:00:00", u"$+22,671.98"),
+             (u"2012-01-31 00:00:00", u"$+22,671.48"),
+             (u"2012-02-01 00:00:00", u"$+22,671.78"),
+             (u"2012-02-01 00:00:00.000001", u"$+22,671.93"),
+             (u"2012-02-01 00:00:00.000002", u"$+22,672.03")])
 
     def not_yet_working(self):
         # -----------------

@@ -486,8 +486,10 @@ class Reconciliation(models.Model):
     amount = models.IntegerField()
     # The time which this reconciliation actually happened.
     at = models.DateTimeField('date')
-    # The import which caused this reconcilation to be created
+    # The import which caused this reconcilation to be created.
     imported_by = models.ForeignKey('Imported', null=True, blank=True)
+    # Any special notes about this reconciliation.
+    notes = models.TextField()
 
     def __unicode__(self):
         return "%s %s" % (self.at,  dollar_fmt(

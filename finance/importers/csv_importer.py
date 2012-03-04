@@ -234,6 +234,10 @@ class FieldList(object):
 class CSVImporter(object):
     """Base class for importers which import from .csv files."""
 
+    @staticmethod
+    def now():
+        return datetime.datetime.now
+
     # Override these attributes
     ###########################################################################
     FIELDS = None
@@ -330,6 +334,8 @@ ORDER = reversed     -> Order is newest first.
 
         # Roll back the following transactions as they have disapeared in the
         # import. We walk backwards rolling back the newest first.
+        amount = 0
+        rolledback_trans = []
         for i, field_list in annotate(reversed(delete_lines)):
 
             # Find the transaction to rollback
@@ -345,12 +351,34 @@ ORDER = reversed     -> Order is newest first.
             assert trans.imported_fields == repr(field_list.fields_raw), (
                 "When rolling back"
                 " the found transaction's imported_fields don't match\n"
-                "(indb) %s != (imported) %s\n" % (
+                "(in db) %s != (imported) %s\n" % (
                     trans.imported_fields, repr(field_list.fields_raw)))
+
+            amount += trans.imported_amount
 
             # Mark the transaction as deleted
             trans.removed_by = imported
             trans.save()
+
+            rolledback_trans.append(trans.id)
+
+        # If we rolled back some transactions and we have a running total, we
+        # need to insert an "rollback" reconciliation.
+        if FieldList.RUNNING_TOTAL_INC in self.FIELDS:
+            if amount != 0:
+                previous_reconcile_id = account.get_reconciliation_order()[-1]
+                previous_reconcile = models.Reconciliation.objects.get(
+                    id=previous_reconcile_id)
+
+                reconcile = models.Reconciliation()
+                reconcile.previous = previous_reconcile
+                reconcile.at = self.now()
+                reconcile.account = account
+                reconcile.imported_by = imported
+                reconcile.amount = previous_reconcile.amount - amount
+                reconcile.notes = "Reconciliation because of %s transaction rollback." % (
+                    rolledback_trans)
+                reconcile.save()
 
         # Mark these as also imported by this
         # Again we walk backwards as there might be many transactions for a
@@ -369,7 +397,7 @@ ORDER = reversed     -> Order is newest first.
             assert trans.imported_fields == repr(field_list.fields_raw), (
                 "When checking common"
                 " the found transaction's imported_fields don't match\n"
-                "(indb) %s != %s (imported)" % (
+                "(in db) %s != %s (imported)" % (
                     trans.imported_fields, repr(field_list.fields_raw)))
 
             trans.imported_also_by.add(imported)
@@ -412,6 +440,8 @@ ORDER = reversed     -> Order is newest first.
                         dollar_fmt(previous_reconcile.amount+trans.imported_amount, account.currency.symbol),
                         dollar_fmt(previous_reconcile.amount+trans.imported_amount-reconcile.amount, account.currency.symbol),
                         )
+
+                reconcile.previous = previous_reconcile
 
                 reconcile.save()
                 trans.reconciliation = reconcile

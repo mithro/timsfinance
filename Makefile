@@ -6,12 +6,11 @@ define \n
 
 endef
 
-ACTIVATE = . bin/activate
+export ACTIVATE = . bin/activate
 
 ###############################################################################
 # Export the configuration to sub-makes
 ###############################################################################
-export
 
 
 ###############################################################################
@@ -23,7 +22,7 @@ lib: bin/activate
 distclean: virtualenv-clean clean
 
 virtualenv-clean:
-	rm -rf bin include lib lib64 share src
+	rm -rf bin build include local lib lib64 share src
 
 clean:
 	git clean -f -d
@@ -32,14 +31,14 @@ bin/activate:
 	virtualenv --no-site-packages .
 
 lib/python2.6/site-packages/distribute-0.6.24-py2.6.egg-info: lib
-	rm distribute*.tar.gz
+	rm distribute*.tar.gz || true
 	$(ACTIVATE) && pip install -U distribute
 
 lib/python2.6/site-packages/ez_setup.py: lib
 	$(ACTIVATE) && pip install ez_setup
 
 src/pip-delete-this-directory.txt: requirements.txt
-	$(ACTIVATE) && pip install -E . -r requirements.txt
+	$(ACTIVATE) && pip install -r requirements.txt
 	mkdir src || true
 	touch -r requirements.txt src/pip-delete-this-directory.txt
 
@@ -89,4 +88,4 @@ reset-sql:
 test: install
 	python manage.py test
 
-.PHONY: lint reset-sql test
+.PHONY: lint reset-sql test serve

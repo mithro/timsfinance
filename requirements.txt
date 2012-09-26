@@ -1,7 +1,7 @@
 -e git://github.com/mithro/git-cl.git#egg=git-cl
 -e git://github.com/lamby/django-lint.git#egg=django-lint
-Django==1.3.1
-django-extensions==0.7.1
-pylint==0.25.1
-pytz==2011n
+Django==1.4.1
+django-extensions==0.9
+pylint
+pytz
 selenium

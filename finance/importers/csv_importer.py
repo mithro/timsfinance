@@ -137,6 +137,8 @@ class FieldList(object):
     # Running total *excludes* the line being processed transaction
     RUNNING_TOTAL_EXC = '__running_total_exc'
 
+    IGNORE = None
+
     # Set to avoid lint warnings
     imported_entered_date = None
 
@@ -424,6 +426,9 @@ ORDER = reversed     -> Order is newest first.
             # Set the fields from the CSV
             field_list.set(trans)
 
+            # Mangle transactions in a bank specific way
+            self.process(trans)
+
             # If they have running totals, we need to do a reconcile
             reconcile = field_list.reconcile(date_count)
             if reconcile:
@@ -465,3 +470,14 @@ ORDER = reversed     -> Order is newest first.
             ).filter(removed_by=None  # Don't count removed transactions
             ).filter(parent_id=None  # Don't count sub-transactions
             ).count()
+
+    def process(self, trans):
+        """Do bank specific processing of the transaction.
+
+        Mainly used for extracting extra data from the description,
+         * phone numbers,
+         * location information,
+         * original currency information.
+        """
+        pass
+

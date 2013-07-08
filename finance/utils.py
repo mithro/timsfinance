@@ -85,11 +85,18 @@ def dollar_display(description, field_amount, field_currency):
 
     """
     def f(obj):
-        value = eval("obj.%s" % field_amount)
-        currency = eval("obj.%s" % field_currency)
-        if value is not None:
-            return dollar_fmt(value, currency)
-        return "(None)"
+        try:
+            currency = eval("obj.%s" % field_currency)
+        except AttributeError:
+            return "(None)"
+
+        try:
+            value = eval("obj.%s" % field_amount)
+        except AttributeError:
+            return "(Invalid Value)"
+
+        return dollar_fmt(value, currency)
+
     f.short_description = description
     return f
 

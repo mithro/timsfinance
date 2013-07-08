@@ -5,5 +5,6 @@ finance.sqlite3
 bin/
 build/
 include/
+local/
 lib/
 src/

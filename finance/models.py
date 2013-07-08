@@ -64,9 +64,6 @@ class RegexForField(models.Model):
         return True
 
 
-class RegexForFieldAdmin(admin.ModelAdmin):
-    list_display = ('description', 'field', 'regex', 'regex_type', 'regex_flags')
-
 ###############################################################################
 
 class Currency(models.Model):
@@ -89,11 +86,6 @@ class Currency(models.Model):
         verbose_name_plural = "currencies"
         ordering = ["currency_id"]
 
-class CurrencyInline(admin.TabularInline):
-    model = Currency
-
-class CurrencyAdmin(admin.ModelAdmin):
-    list_display = ('currency_id', 'description')
 
 ###############################################################################
 
@@ -120,11 +112,6 @@ class Category(models.Model):
         verbose_name_plural = "categories"
         ordering = ["category_id"]
 
-class CategoryInline(admin.TabularInline):
-    model = Category
-
-class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('category_id', 'description')
 
 ###############################################################################
 
@@ -144,10 +131,6 @@ class Site(models.Model):
     def __unicode__(self):
         return self.site_id
 
-class SiteAdmin(admin.ModelAdmin):
-    list_display = ('site_id', 'username', 'importer')
-    list_filter = ('importer',)
-    inlines = []
 
 ###############################################################################
 
@@ -187,14 +170,6 @@ class Account(models.Model):
     class Meta:
         unique_together = (("site", "account_id"))
 
-class AccountInline(admin.TabularInline):
-    model = Account
-
-SiteAdmin.inlines.append(AccountInline)
-
-class AccountAdmin(admin.ModelAdmin):
-    list_display = ('site', 'account_id', 'sql_id', 'description', 'currency', 'current_balance')
-    list_filter = ('site',)
 
 ###############################################################################
 
@@ -259,9 +234,6 @@ class Fee(models.Model):
         return "%s - %s" % (self.account, self.description)
 
 
-class FeeAdmin(admin.ModelAdmin):
-    list_display = ('account', 'description', 'amount', 'type', 'model')
-
 ###############################################################################
 
 class RelatedTransaction(models.Model):
@@ -304,9 +276,6 @@ class RelatedTransaction(models.Model):
     def __unicode__(self):
         return "%s <-- %s --> %s" % (self.trans_from, self.relationship, self.trans_to)
 
-class RelatedTransactionAdmin(admin.ModelAdmin):
-    list_display = ('trans_to', 'trans_from', 'relationship', 'type', 'fee')
-    list_filter = ('type', 'relationship',)
 
 ###############################################################################
 
@@ -457,21 +426,6 @@ class Transaction(models.Model):
         get_latest_by = "imported_entered_date"
         ordering = ["-imported_entered_date", "-imported_effective_date"]
 
-class TransactionAdmin(admin.ModelAdmin):
-    list_display = (
-        'account',
-        'imported_entered_date',
-        'description',
-        dollar_display('Amount', 'imported_amount', 'account.currency.symbol'),
-        'location',
-        dollar_display('Original Amount', 'imported_original_amount', 'imported_original_currency.symbol'),
-        'primary_category',
-        'categories',
-        )
-    list_filter = ('account','primary_category')
-    search_fields = ('imported_description', 'override_description', 'imported_location', 'override_location')
-    list_editable = ('primary_category',)
-    date_hierarchy = 'imported_entered_date'
 
 ###############################################################################
 
@@ -526,7 +480,3 @@ class Categorizer(models.Model):
 
     # Category that should be assigned
     category = models.ForeignKey('Category')
-
-class CategorizerAdmin(admin.ModelAdmin):
-    list_display = ('pk', 'accounts_set', 'regex_set', 'amount_minimum', 'amount_maximum', 'personal', 'category')
-    list_filter = ('category', 'personal')

@@ -1,6 +1,6 @@
 -e git://github.com/mithro/git-cl.git#egg=git-cl
 -e git://github.com/lamby/django-lint.git#egg=django-lint
-Django==1.4.1
+https://www.djangoproject.com/download/1.6b1/tarball/#Django
 django-extensions==0.9
 pylint
 pytz

@@ -592,3 +592,33 @@ class RunningImporterTest(CSVTestCaseBase):
 ,31/01/2012,NON REDIATM WITHDRAWAL FEE,-0.50,22671.48
 """)
 
+
+class DebitCreditImporterTest(CSVTestCaseBase):
+    """Test the debit/credit style of CSV files."""
+
+    class Importer(csv_importer.CSVImporter):
+        FIELDS = [
+            csv_importer.FieldList.DATE,
+            csv_importer.FieldList.DEBIT,
+            csv_importer.FieldList.CREDIT,
+            csv_importer.FieldList.DESCRIPTION,
+            ]
+        DATEFMT = "%d/%m/%Y"
+        ORDER = reversed
+
+    def test_simple(self):
+        importer = self.Importer()
+
+        csv_basic = SIO.StringIO("""\
+09/11/2011,0.12,,"Cattle"
+09/11/2011,,3.45,"Boat"
+09/11/2011,6.78,,"Apple"
+""")
+
+        self.assertTrue(importer.parse_file(self.account, csv_basic))
+        self.assertAllTransEqual([
+            (u"2011-11-09 00:00:00.000000.0", False, u"Apple", -678),
+            (u"2011-11-09 00:00:00.000000.1", False, u"Boat", 345),
+            (u"2011-11-09 00:00:00.000000.2", False, u"Cattle", -12),
+            ])
+

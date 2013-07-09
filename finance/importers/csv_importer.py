@@ -126,6 +126,139 @@ def csv_changes(order, old_data, new_data):
 class FieldList(object):
     """Maps field values from CSV output to field names on a transaction."""
 
+    @staticmethod
+    def _extract_cents(field_value):
+        """Extract cents from an amount field.
+
+        Simple number with decimal and missing
+        >>> FieldList._extract_cents("123")
+        12300
+        >>> FieldList._extract_cents("0123")
+        12300
+        >>> FieldList._extract_cents("123.45")
+        12345
+        >>> FieldList._extract_cents("-123")
+        -12300
+        >>> FieldList._extract_cents("-0123")
+        -12300
+        >>> FieldList._extract_cents("-123.45")
+        -12345
+
+        >>> FieldList._extract_cents("$123.45")
+        12345
+        >>> FieldList._extract_cents("$-123.45")
+        -12345
+
+        >>> FieldList._extract_cents("$     123.45")
+        12345
+        >>> FieldList._extract_cents("$    -123.45")
+        -12345
+
+        >>> FieldList._extract_cents("$AUD 123.45")
+        12345
+        >>> FieldList._extract_cents("$AUD -123.45")
+        -12345
+
+        >>> FieldList._extract_cents("123-0")
+        Traceback (most recent call last):
+            ...
+        AssertionError
+
+        >>> FieldList._extract_cents("123.0")
+        Traceback (most recent call last):
+            ...
+        AssertionError
+
+        >>> FieldList._extract_cents("123.0000")
+        Traceback (most recent call last):
+            ...
+        AssertionError
+        """
+        field_value = re.sub('[^0-9.-]', '', field_value)
+
+        # Negative only allow at front
+        assert field_value.find('-') in (-1, 0)
+
+        decimal_point = field_value.split('.')
+        if len(decimal_point) == 1:
+            decimal_point.append("00")
+
+        assert len(decimal_point[-1]) == 2
+
+        field_value = "".join(decimal_point)
+        return int(field_value)
+
+    @staticmethod
+    def _to_cents(value):
+        """Convert cents to the old xxx.xx format.
+
+        >>> FieldList._to_cents(0)
+        '0.00'
+        >>> FieldList._to_cents(1)
+        '0.01'
+        >>> FieldList._to_cents(55)
+        '0.55'
+        >>> FieldList._to_cents(100)
+        '1.00'
+        >>> FieldList._to_cents(101)
+        '1.01'
+        >>> FieldList._to_cents(1234567890)
+        '12345678.90'
+
+        >>> FieldList._to_cents(-0)
+        '0.00'
+        >>> FieldList._to_cents(-1)
+        '-0.01'
+        >>> FieldList._to_cents(-55)
+        '-0.55'
+        >>> FieldList._to_cents(-100)
+        '-1.00'
+        >>> FieldList._to_cents(-101)
+        '-1.01'
+        >>> FieldList._to_cents(-1234567890)
+        '-12345678.90'
+        """
+        if value != 0:
+            sign = value / abs(value)
+        else:
+            sign = 1
+
+        dollars = abs(value) // 100
+        cents = abs(value) % 100
+        return "%s%i.%02i" % (['-', ''][sign >= 0], dollars, cents)
+
+
+    @classmethod
+    def _debit_transform(cls, field_value):
+        """
+        >>> FieldList._debit_transform("")
+        >>> FieldList._debit_transform("NONE")
+        >>> FieldList._debit_transform("$0.00")
+
+        >>> FieldList._debit_transform("123")
+        '-123.00'
+        >>> FieldList._debit_transform("123.45")
+        '-123.45'
+        >>> FieldList._debit_transform("-123.45")
+        '123.45'
+        """
+        if not field_value:
+            return None
+        else:
+            field_value = cls._extract_cents(field_value)
+            if not field_value:
+                return None
+            else:
+                return cls._to_cents(-field_value)
+
+    @classmethod
+    def _credit_transform(cls, field_value):
+        if not field_value:
+            return None
+        else:
+            return cls._to_cents(cls._extract_cents(field_value))
+
+
     UNIQUE_ID = '__unique_id'
     DATE = 'imported_entered_date'
     EFFECTIVE_DATE = 'imported_effective_date'
@@ -136,6 +269,9 @@ class FieldList(object):
     RUNNING_TOTAL_INC = '__running_total_inc'
     # Running total *excludes* the line being processed transaction
     RUNNING_TOTAL_EXC = '__running_total_exc'
+
+    DEBIT = ('imported_amount', '_debit_transform')
+    CREDIT = ('imported_amount', '_credit_transform')
 
     IGNORE = None
 
@@ -154,9 +290,32 @@ class FieldList(object):
         assert self.ENTERED_DATE in fields_desc, \
             "Entered date is a required field, please fix the importer."
 
+        self.value_was_set = set()  # Guard against setting the same field twice...
+
         for field_name, field_value in zip(fields_desc, fields_value):
             if field_name is None:
                 continue
+
+            # Fields which don't just neatly map onto a field in the database
+            # and hence need some type of transformation function.
+            if isinstance(field_name, (tuple, list)):
+                new_field_value = getattr(self, field_name[1])(field_value)
+                if new_field_value is None:
+                    continue
+
+                if callable(field_name[0]):
+                    field_name = field_name[0](field_value)
+                else:
+                    field_name = field_name[0]
+
+                field_value = new_field_value
+
+            assert isinstance(field_name, (str, unicode))
+
+            # Guard against setting the same field twice....
+            assert field_name not in self.value_was_set, "Have already set %s to %s" % (
+                field_name, getattr(self, field_name))
+            self.value_was_set.add(field_name)
 
             # Convert dates into datetime objects
             if field_name.endswith("_date"):
@@ -164,21 +323,12 @@ class FieldList(object):
                     field_value = datetime.datetime.strptime(field_value, datefmt)
                 else:
                     field_value = None
+
                 setattr(self, field_name, field_value)
 
             # Convert amount to an int
             elif field_name.endswith("_amount") or field_name.startswith("__running_total_"):
-                field_value = re.sub('[^0-9.-]', '', field_value)
-
-                # Negative only allow at front
-                assert field_value.find('-') in (-1, 0)
-
-                decimal_point = field_value.split('.')
-                if len(decimal_point) == 1:
-                    decimal_point.append("00")
-
-                field_value = "".join(decimal_point)
-                setattr(self, field_name, int(field_value))
+                setattr(self, field_name, self._extract_cents(field_value))
 
             # Just set it.
             else:
@@ -222,11 +372,7 @@ class FieldList(object):
 
     def set(self, trans):
         """Copy data from ourselves into the transaction."""
-        for field_name in self.fields_desc:
-            if field_name is None:
-                continue
-            if field_name.startswith("__"):
-                continue
+        for field_name in self.value_was_set:
             setattr(trans, field_name, getattr(self, field_name))
 
     def __str__(self):

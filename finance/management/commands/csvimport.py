@@ -128,7 +128,13 @@ Entered date of the transaction (IE when it first appeared in the system).
 Description of the transaction.
 
 * AMOUNT
-Amount in the accounts currency.
+Amounts in the accounts currency, both negative and positive.
+
+* DEBIT
+Removals from the amount to the account.
+
+* CREDIT
+Additions to the amount to the account.
 
 * IGNORE
 Ignore this field.

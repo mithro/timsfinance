@@ -1,108 +1,120 @@
 [
-  {
-    "model": "finance.Currency",
-    "pk": "AUD",
-    "fields": {
-      "currency_id": "AUD",
-      "description": "Australian Dollar",
-      "symbol": "$"
-    }
-  },
-  {
-    "model": "finance.Currency",
-    "pk": "USD",
-    "fields": {
-      "currency_id": "USD",
-      "description": "United States Dollar",
-      "symbol": "$"
-    }
-  },
-  {
-    "model": "finance.Currency",
-    "pk": "CAD",
-    "fields": {
-      "currency_id": "CAD",
-      "description": "United States Dollar",
-      "symbol": "$"
-    }
-  },
-  {
-    "model": "finance.Currency",
-    "pk": "GBP",
-    "fields": {
-      "currency_id": "GBP",
-      "description": "Great British Pound",
-      "symbol": "£"
-    }
-  },
-  {
-    "model": "finance.Currency",
-    "pk": "EUR",
-    "fields": {
-      "currency_id": "EUR",
-      "description": "Euro",
-      "symbol": "€"
-    }
-  },
-  {
-    "model": "finance.Currency",
-    "pk": "SGP",
-    "fields": {
-      "currency_id": "SGP",
-      "description": "Singapore Dollar",
-      "symbol": "$"
-    }
-  },
-  {
-    "pk": 3,
-    "model": "finance.Category",
-    "fields": {
-      "category_id": "medical",
-      "description": "Medical Expenses"
-    }
-  },
-  {
-    "pk": 4,
-    "model": "finance.Category",
-    "fields": {
-      "category_id": "medical/cpap",
-      "description": "CPAP Machine Rental",
-      "parent": "medical"
-    }
-  },
-  {
-    "pk": 5,
-    "model": "finance.Category",
-    "fields": {
-      "category_id": "bank",
-      "description": "Banking"
-    }
-  },
-  {
-    "pk": 6,
-    "model": "finance.Category",
-    "fields": {
-      "category_id": "bank/fees",
-      "description": "Bank Fees",
-      "parent": "bank"
-    }
-  },
-  {
-    "pk": 7,
-    "model": "finance.Category",
-    "fields": {
-      "category_id": "bank/interest-positive",
-      "description": "Bank Interest Earned",
-      "parent": "bank"
-    }
-  },
-  {
-    "pk": 8,
-    "model": "finance.Category",
-    "fields": {
-      "category_id": "bank/interest-negative",
-      "description": "Bank Interest Taken",
-      "parent": "bank"
-    }
+{
+  "pk": "AUD", 
+  "model": "finance.currency", 
+  "fields": {
+    "symbol": "$", 
+    "description": "Australian Dollar"
   }
+},
+{
+  "pk": "CAD", 
+  "model": "finance.currency", 
+  "fields": {
+    "symbol": "$", 
+    "description": "United States Dollar"
+  }
+},
+{
+  "pk": "EUR", 
+  "model": "finance.currency", 
+  "fields": {
+    "symbol": "\u20ac", 
+    "description": "Euro"
+  }
+},
+{
+  "pk": "GBP", 
+  "model": "finance.currency", 
+  "fields": {
+    "symbol": "\u00a3", 
+    "description": "Great British Pound"
+  }
+},
+{
+  "pk": "SGP", 
+  "model": "finance.currency", 
+  "fields": {
+    "symbol": "$", 
+    "description": "Singapore Dollar"
+  }
+},
+{
+  "pk": "USD", 
+  "model": "finance.currency", 
+  "fields": {
+    "symbol": "$", 
+    "description": "United States Dollar"
+  }
+},
+{
+  "pk": "bank", 
+  "model": "finance.category", 
+  "fields": {
+    "description": "Banking", 
+    "parent": null
+  }
+},
+{
+  "pk": "bank/fees", 
+  "model": "finance.category", 
+  "fields": {
+    "description": "Bank Fees", 
+    "parent": "bank"
+  }
+},
+{
+  "pk": "bank/interest-negative", 
+  "model": "finance.category", 
+  "fields": {
+    "description": "Bank Interest Taken", 
+    "parent": "bank"
+  }
+},
+{
+  "pk": "bank/interest-positive", 
+  "model": "finance.category", 
+  "fields": {
+    "description": "Bank Interest Earned", 
+    "parent": "bank"
+  }
+},
+{
+  "pk": "medical", 
+  "model": "finance.category", 
+  "fields": {
+    "description": "Medical Expenses", 
+    "parent": null
+  }
+},
+{
+  "pk": "medical/cpap", 
+  "model": "finance.category", 
+  "fields": {
+    "description": "CPAP Machine Rental", 
+    "parent": "medical"
+  }
+},
+{
+  "pk": "1", 
+  "model": "finance.site", 
+  "fields": {
+    "username": "user", 
+    "importer": "/path/to/importer", 
+    "password": "", 
+    "image": "http://example.com/bank-logo.png"
+  }
+},
+{
+  "pk": 1, 
+  "model": "finance.account", 
+  "fields": {
+    "description": "My First Account", 
+    "short_id": "accountname", 
+    "site": "1", 
+    "account_id": "123456789", 
+    "currency": "AUD", 
+    "last_import": "2013-07-08T19:33:01"
+  }
+}
 ]

@@ -67,6 +67,7 @@ class Command(BaseCommand):
             DATEFMT = options['datefmt']
             ORDER = [lambda x: x, reversed][options['order']]
 
+        account = None
         try:
             account = models.Account.objects.get(account_id=options['account'])
         except Exception, e:
@@ -75,6 +76,8 @@ class Command(BaseCommand):
             account = models.Account.objects.get(short_id=options['account'])
         except Exception, e:
             print e
+        if account is None:
+            raise Exception("Could not find the account you specified.")
 
         importer = TemporaryImporter()
         try:

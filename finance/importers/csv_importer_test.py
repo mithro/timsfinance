@@ -11,27 +11,6 @@ from finance import models
 from finance.importers import csv_importer
 
 
-class SimpleExampleImporter(csv_importer.CSVImporter):
-    FIELDS = [
-        csv_importer.FieldList.DATE,
-        csv_importer.FieldList.AMOUNT,
-        csv_importer.FieldList.DESCRIPTION,
-        None]
-    DATEFMT = "%d/%m/%Y"
-    ORDER = reversed
-
-
-class RunningExampleImporter(csv_importer.CSVImporter):
-    FIELDS = [
-        csv_importer.FieldList.EFFECTIVE_DATE,
-        csv_importer.FieldList.ENTERED_DATE,
-        csv_importer.FieldList.DESCRIPTION,
-        csv_importer.FieldList.AMOUNT,
-        csv_importer.FieldList.RUNNING_TOTAL_INC,
-        ]
-    DATEFMT = "%d/%m/%Y"
-    ORDER = reversed
-
 
 class CSVChangesTestCase(djangotest.TestCase):
     def test_csv_empty_first(self):
@@ -119,7 +98,7 @@ class CSVChangesTestCase(djangotest.TestCase):
         self.assertListEqual(["b", "a", "1", "2", "3"], inserts)
 
 
-class CSVTestCase(djangotest.TestCase):
+class CSVTestCaseBase(djangotest.TestCase):
     def setUp(self):
         # Mock out datetime.datetime.now
         self.now = lambda *args: datetime.datetime.strptime(
@@ -157,8 +136,11 @@ class CSVTestCase(djangotest.TestCase):
 
     def assertTransEqual(self, query, actual):
         self.assertListEqual(
-            list((trans.trans_id, trans.removed_by is not None,
-                  trans.imported_description) for trans in query),
+            list((trans.trans_id, 
+                  trans.removed_by is not None,
+                  trans.imported_description,
+                  trans.imported_amount,
+                  ) for trans in query),
             actual)
 
     def assertAllTransEqual(self, actual):
@@ -185,28 +167,38 @@ class CSVTestCase(djangotest.TestCase):
             models.Reconciliation.objects.all().order_by("at"),
             actual)
 
-    def test_unique(self):
-        # Test csv which has a unique identifer....
-        pass
+
+class SimpleImporterTest(CSVTestCaseBase):
+    """Test the simple date, amount and description style CSV file."""
+
+    class Importer(csv_importer.CSVImporter):
+        FIELDS = [
+            csv_importer.FieldList.DATE,
+            csv_importer.FieldList.AMOUNT,
+            csv_importer.FieldList.DESCRIPTION,
+            csv_importer.FieldList.IGNORE,
+            ]
+        DATEFMT = "%d/%m/%Y"
+        ORDER = reversed
 
     def test_simple(self):
-        importer = SimpleExampleImporter()
+        importer = self.Importer()
 
         csv_basic = SIO.StringIO("""\
-09/11/2011,"0.20","Cattle",""
-09/11/2011,"0.20","Boat",""
-09/11/2011,"0.20","Apple",""
+09/11/2011,"0.12","Cattle",""
+09/11/2011,"1.23","Boat",""
+09/11/2011,"4.56","Apple",""
 """)
 
         self.assertTrue(importer.parse_file(self.account, csv_basic))
-        self.assertAllTransEqual(
-            [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-09 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-09 00:00:00.000000.2", False, u"Cattle")]
-            )
+        self.assertAllTransEqual([
+            (u"2011-11-09 00:00:00.000000.0", False, u"Apple", 456),
+            (u"2011-11-09 00:00:00.000000.1", False, u"Boat", 123),
+            (u"2011-11-09 00:00:00.000000.2", False, u"Cattle", 12),
+            ])
 
     def test_simple_repeated_import(self):
-        importer = SimpleExampleImporter()
+        importer = self.Importer()
 
         # Import the exact same data twice, should cause no change
         csv_basic1 = SIO.StringIO("""\
@@ -214,23 +206,23 @@ class CSVTestCase(djangotest.TestCase):
 09/11/2011,"0.20","Apple",""
 """)
         self.assertTrue(importer.parse_file(self.account, csv_basic1))
-        self.assertAllTransEqual(
-            [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-09 00:00:00.000000.1", False, u"Boat")]
-            )
+        self.assertAllTransEqual([
+            (u"2011-11-09 00:00:00.000000.0", False, u"Apple", 20),
+            (u"2011-11-09 00:00:00.000000.1", False, u"Boat", 20),
+            ])
 
         csv_basic2 = SIO.StringIO("""\
 09/11/2011,"0.20","Boat",""
 09/11/2011,"0.20","Apple",""
 """)
         self.assertFalse(importer.parse_file(self.account, csv_basic2))
-        self.assertAllTransEqual(
-            [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-09 00:00:00.000000.1", False, u"Boat")]
-            )
+        self.assertAllTransEqual([
+            (u"2011-11-09 00:00:00.000000.0", False, u"Apple", 20),
+            (u"2011-11-09 00:00:00.000000.1", False, u"Boat", 20),
+            ])
 
     def test_simple_duplicate_desc(self):
-        importer = SimpleExampleImporter()
+        importer = self.Importer()
 
         csv_duplicates = SIO.StringIO("""\
 16/11/2011,"-0.20","INTNL FEE",""
@@ -239,14 +231,15 @@ class CSVTestCase(djangotest.TestCase):
 14/11/2011,"-0.20","INTNL FEE",""
 """)
         self.assertTrue(importer.parse_file(self.account, csv_duplicates))
-        self.assertAllTransEqual(
-            [(u"2011-11-14 00:00:00.000000.0", False, u"INTNL FEE"),
-             (u"2011-11-15 00:00:00.000000.0", False, u"INTNL FEE"),
-             (u"2011-11-15 00:00:00.000000.1", False, u"INTNL FEE"),
-             (u"2011-11-16 00:00:00.000000.0", False, u"INTNL FEE")])
+        self.assertAllTransEqual([
+            (u"2011-11-14 00:00:00.000000.0", False, u"INTNL FEE", -20),
+            (u"2011-11-15 00:00:00.000000.0", False, u"INTNL FEE", -20),
+            (u"2011-11-15 00:00:00.000000.1", False, u"INTNL FEE", -20),
+            (u"2011-11-16 00:00:00.000000.0", False, u"INTNL FEE", -20),
+            ])
 
     def test_simple_disappear_same_date(self):
-        importer = SimpleExampleImporter()
+        importer = self.Importer()
 
         csv_missing_a = SIO.StringIO("""\
 07/11/2011,"0.20","Doggy",""
@@ -255,11 +248,12 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Apple",""
 """)
         self.assertTrue(importer.parse_file(self.account, csv_missing_a))
-        self.assertAllTransEqual(
-            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-07 00:00:00.000000.2", False, u"Cattle"),
-             (u"2011-11-07 00:00:00.000000.3", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-07 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-07 00:00:00.000000.1", False, u"Boat",20),
+            (u"2011-11-07 00:00:00.000000.2", False, u"Cattle",20),
+            (u"2011-11-07 00:00:00.000000.3", False, u"Doggy",20),
+            ])
 
         # Cattle disappears
         csv_missing_b = SIO.StringIO("""\
@@ -268,15 +262,16 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Apple",""
 """)
         self.assertTrue(importer.parse_file(self.account, csv_missing_b))
-        self.assertAllTransEqual(
-            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
-             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
-             (u"2011-11-07 00:00:00.000000.2", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-07 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-07 00:00:00.000000.1", False, u"Boat",20),
+            (u"2011-11-07 00:00:00.000000.2", True, u"Cattle",20),
+            (u"2011-11-07 00:00:00.000000.3", True, u"Doggy",20),
+            (u"2011-11-07 00:00:00.000000.2", False, u"Doggy",20),
+            ])
 
     def test_simple_pogo_same_date(self):
-        importer = SimpleExampleImporter()
+        importer = self.Importer()
 
         csv_missing_a = SIO.StringIO("""\
 07/11/2011,"0.20","Doggy",""
@@ -285,11 +280,12 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Apple",""
 """)
         self.assertTrue(importer.parse_file(self.account, csv_missing_a))
-        self.assertAllTransEqual(
-            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-07 00:00:00.000000.2", False, u"Cattle"),
-             (u"2011-11-07 00:00:00.000000.3", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-07 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-07 00:00:00.000000.1", False, u"Boat",20),
+            (u"2011-11-07 00:00:00.000000.2", False, u"Cattle",20),
+            (u"2011-11-07 00:00:00.000000.3", False, u"Doggy",20),
+            ])
 
         # Cattle disappears
         csv_missing_b = SIO.StringIO("""\
@@ -298,38 +294,41 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Apple",""
 """)
         self.assertTrue(importer.parse_file(self.account, csv_missing_b))
-        self.assertAllTransEqual(
-            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
-             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
-             (u"2011-11-07 00:00:00.000000.2", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-07 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-07 00:00:00.000000.1", False, u"Boat",20),
+            (u"2011-11-07 00:00:00.000000.2", True, u"Cattle",20),
+            (u"2011-11-07 00:00:00.000000.3", True, u"Doggy",20),
+            (u"2011-11-07 00:00:00.000000.2", False, u"Doggy",20),
+            ])
 
         csv_missing_a.seek(0)
         self.assertTrue(importer.parse_file(self.account, csv_missing_a))
-        self.assertAllTransEqual(
-            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
-             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
-             (u"2011-11-07 00:00:00.000000.2", True, u"Doggy"),
-             (u"2011-11-07 00:00:00.000000.2", False, u"Cattle"),
-             (u"2011-11-07 00:00:00.000000.3", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-07 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-07 00:00:00.000000.1", False, u"Boat",20),
+            (u"2011-11-07 00:00:00.000000.2", True, u"Cattle",20),
+            (u"2011-11-07 00:00:00.000000.3", True, u"Doggy",20),
+            (u"2011-11-07 00:00:00.000000.2", True, u"Doggy",20),
+            (u"2011-11-07 00:00:00.000000.2", False, u"Cattle",20),
+            (u"2011-11-07 00:00:00.000000.3", False, u"Doggy",20),
+            ])
 
         csv_missing_b.seek(0)
         self.assertTrue(importer.parse_file(self.account, csv_missing_b))
-        self.assertAllTransEqual(
-            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-07 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
-             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
-             (u"2011-11-07 00:00:00.000000.2", True, u"Doggy"),
-             (u"2011-11-07 00:00:00.000000.2", True, u"Cattle"),
-             (u"2011-11-07 00:00:00.000000.3", True, u"Doggy"),
-             (u"2011-11-07 00:00:00.000000.2", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-07 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-07 00:00:00.000000.1", False, u"Boat",20),
+            (u"2011-11-07 00:00:00.000000.2", True, u"Cattle",20),
+            (u"2011-11-07 00:00:00.000000.3", True, u"Doggy",20),
+            (u"2011-11-07 00:00:00.000000.2", True, u"Doggy",20),
+            (u"2011-11-07 00:00:00.000000.2", True, u"Cattle",20),
+            (u"2011-11-07 00:00:00.000000.3", True, u"Doggy",20),
+            (u"2011-11-07 00:00:00.000000.2", False, u"Doggy",20),
+            ])
 
     def test_simple_disappear_differ_date(self):
-        importer = SimpleExampleImporter()
+        importer = self.Importer()
 
         csv_missing_a = SIO.StringIO("""\
 10/11/2011,"0.20","Doggy",""
@@ -338,11 +337,12 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Apple",""
 """)
         self.assertTrue(importer.parse_file(self.account, csv_missing_a))
-        self.assertAllTransEqual(
-            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-08 00:00:00.000000.0", False, u"Boat"),
-             (u"2011-11-09 00:00:00.000000.0", False, u"Cattle"),
-             (u"2011-11-10 00:00:00.000000.0", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-07 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-08 00:00:00.000000.0", False, u"Boat",20),
+            (u"2011-11-09 00:00:00.000000.0", False, u"Cattle",20),
+            (u"2011-11-10 00:00:00.000000.0", False, u"Doggy",20),
+            ])
 
         # Cattle disappears
         csv_missing_b = SIO.StringIO("""\
@@ -351,15 +351,16 @@ class CSVTestCase(djangotest.TestCase):
 07/11/2011,"0.20","Apple",""
 """)
         self.assertTrue(importer.parse_file(self.account, csv_missing_b))
-        self.assertAllTransEqual(
-            [(u"2011-11-07 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-08 00:00:00.000000.0", False, u"Boat"),
-             (u"2011-11-09 00:00:00.000000.0", True, u"Cattle"),
-             (u"2011-11-10 00:00:00.000000.0", True, u"Doggy"),
-             (u"2011-11-10 00:00:00.000000.0", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-07 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-08 00:00:00.000000.0", False, u"Boat",20),
+            (u"2011-11-09 00:00:00.000000.0", True, u"Cattle",20),
+            (u"2011-11-10 00:00:00.000000.0", True, u"Doggy",20),
+            (u"2011-11-10 00:00:00.000000.0", False, u"Doggy",20),
+            ])
 
     def test_simple_appear_same_date(self):
-        importer = SimpleExampleImporter()
+        importer = self.Importer()
 
         csv_middle_addition_a = SIO.StringIO("""\
 12/11/2011,"0.20","Doggy",""
@@ -368,10 +369,11 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_middle_addition_a))
-        self.assertAllTransEqual(
-            [(u"2011-11-12 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-12 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-12 00:00:00.000000.2", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-12 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-12 00:00:00.000000.1", False, u"Boat",20),
+            (u"2011-11-12 00:00:00.000000.2", False, u"Doggy",20),
+            ])
 
         # Doggy appears in the middle
         csv_middle_addition_b = SIO.StringIO("""\
@@ -382,15 +384,16 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_middle_addition_b))
-        self.assertAllTransEqual(
-            [(u"2011-11-12 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-12 00:00:00.000000.1", False, u"Boat"),
-             (u"2011-11-12 00:00:00.000000.2", True, u"Doggy"),
-             (u"2011-11-12 00:00:00.000000.2", False, u"Cattle"),
-             (u"2011-11-12 00:00:00.000000.3", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-12 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-12 00:00:00.000000.1", False, u"Boat",20),
+            (u"2011-11-12 00:00:00.000000.2", True, u"Doggy",20),
+            (u"2011-11-12 00:00:00.000000.2", False, u"Cattle",20),
+            (u"2011-11-12 00:00:00.000000.3", False, u"Doggy",20),
+            ])
 
     def test_simple_appear_differ_date(self):
-        importer = SimpleExampleImporter()
+        importer = self.Importer()
 
         csv_middle_addition_a = SIO.StringIO("""\
 12/11/2011,"0.20","Doggy",""
@@ -399,10 +402,11 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_middle_addition_a))
-        self.assertAllTransEqual(
-            [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-10 00:00:00.000000.0", False, u"Boat"),
-             (u"2011-11-12 00:00:00.000000.0", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-09 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-10 00:00:00.000000.0", False, u"Boat",20),
+            (u"2011-11-12 00:00:00.000000.0", False, u"Doggy",20),
+            ])
 
         # Cattle appears in the middle
         csv_middle_addition_b = SIO.StringIO("""\
@@ -413,15 +417,31 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_middle_addition_b))
-        self.assertAllTransEqual(
-            [(u"2011-11-09 00:00:00.000000.0", False, u"Apple"),
-             (u"2011-11-10 00:00:00.000000.0", False, u"Boat"),
-             (u"2011-11-12 00:00:00.000000.0", True, u"Doggy"),
-             (u"2011-11-11 00:00:00.000000.0", False, u"Cattle"),
-             (u"2011-11-12 00:00:00.000000.0", False, u"Doggy")])
+        self.assertAllTransEqual([
+            (u"2011-11-09 00:00:00.000000.0", False, u"Apple",20),
+            (u"2011-11-10 00:00:00.000000.0", False, u"Boat",20),
+            (u"2011-11-12 00:00:00.000000.0", True, u"Doggy",20),
+            (u"2011-11-11 00:00:00.000000.0", False, u"Cattle",20),
+            (u"2011-11-12 00:00:00.000000.0", False, u"Doggy",20),
+            ])
+
+
+class RunningImporterTest(CSVTestCaseBase):
+    """Test running totals in CSV files."""
+
+    class Importer(csv_importer.CSVImporter):
+        FIELDS = [
+            csv_importer.FieldList.EFFECTIVE_DATE,
+            csv_importer.FieldList.ENTERED_DATE,
+            csv_importer.FieldList.DESCRIPTION,
+            csv_importer.FieldList.AMOUNT,
+            csv_importer.FieldList.RUNNING_TOTAL_INC,
+            ]
+        DATEFMT = "%d/%m/%Y"
+        ORDER = reversed
 
     def test_running_import(self):
-        importer = RunningExampleImporter()
+        importer = self.Importer()
 
         reconcile = models.Reconciliation.objects.all().order_by("id")[0]
         reconcile.amount = 2267198
@@ -435,20 +455,22 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_running))
-        self.assertAllTransEqual(
-            [(u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE"),
-             (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY"),
-             (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT VISA (LOCAL)"),
-             (u"2012-02-01 00:00:00.000000.2", False, u"REWARD BENEFIT VISA (OS)")])
-        self.assertAllReconcileEqual(
-            [(u"1970-01-01 10:00:00", u"$+22,671.98"),
-             (u"2012-01-31 00:00:00", u"$+22,671.48"),
-             (u"2012-02-01 00:00:00", u"$+22,671.78"),
-             (u"2012-02-01 00:00:00.000001", u"$+22,671.93"),
-             (u"2012-02-01 00:00:00.000002", u"$+22,672.03")])
+        self.assertAllTransEqual([
+            (u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE",-50),
+            (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY",30),
+            (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT VISA (LOCAL)",15),
+            (u"2012-02-01 00:00:00.000000.2", False, u"REWARD BENEFIT VISA (OS)",10),
+            ])
+        self.assertAllReconcileEqual([
+            (u"1970-01-01 10:00:00", u"$+22,671.98"),
+            (u"2012-01-31 00:00:00", u"$+22,671.48"),
+            (u"2012-02-01 00:00:00", u"$+22,671.78"),
+            (u"2012-02-01 00:00:00.000001", u"$+22,671.93"),
+            (u"2012-02-01 00:00:00.000002", u"$+22,672.03"),
+            ])
 
     def test_running_normal(self):
-        importer = RunningExampleImporter()
+        importer = self.Importer()
 
         reconcile = models.Reconciliation.objects.all().order_by("id")[0]
         reconcile.amount = 2267198
@@ -461,15 +483,17 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_normal1))
-        self.assertAllTransEqual(
-            [(u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE"),
-             (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY"),
-             (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT BPAY")])
-        self.assertAllReconcileEqual(
-            [(u"1970-01-01 10:00:00", u"$+22,671.98"),
-             (u"2012-01-31 00:00:00", u"$+22,671.48"),
-             (u"2012-02-01 00:00:00", u"$+22,671.78"),
-             (u"2012-02-01 00:00:00.000001", u"$+22,672.08")])
+        self.assertAllTransEqual([
+            (u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE",-50),
+            (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY",30),
+            (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT BPAY",30),
+            ])
+        self.assertAllReconcileEqual([
+            (u"1970-01-01 10:00:00", u"$+22,671.98"),
+            (u"2012-01-31 00:00:00", u"$+22,671.48"),
+            (u"2012-02-01 00:00:00", u"$+22,671.78"),
+            (u"2012-02-01 00:00:00.000001", u"$+22,672.08"),
+            ])
 
         csv_normal2 = SIO.StringIO("""\
 ,01/02/2012,REWARD BENEFIT VISA (OS),0.10,22672.33
@@ -479,22 +503,24 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_normal2))
-        self.assertAllTransEqual(
-            [(u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE"),
-             (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY"),
-             (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT BPAY"),
-             (u"2012-02-01 00:00:00.000000.2", False, u"REWARD BENEFIT VISA (LOCAL)"),
-             (u"2012-02-01 00:00:00.000000.3", False, u"REWARD BENEFIT VISA (OS)")])
-        self.assertAllReconcileEqual(
-            [(u"1970-01-01 10:00:00", u"$+22,671.98"),
-             (u"2012-01-31 00:00:00", u"$+22,671.48"),
-             (u"2012-02-01 00:00:00", u"$+22,671.78"),
-             (u"2012-02-01 00:00:00.000001", u"$+22,672.08"),
-             (u"2012-02-01 00:00:00.000002", u"$+22,672.23"),
-             (u"2012-02-01 00:00:00.000003", u"$+22,672.33")])
+        self.assertAllTransEqual([
+            (u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE",-50),
+            (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY",30),
+            (u"2012-02-01 00:00:00.000000.1", False, u"REWARD BENEFIT BPAY",30),
+            (u"2012-02-01 00:00:00.000000.2", False, u"REWARD BENEFIT VISA (LOCAL)",15),
+            (u"2012-02-01 00:00:00.000000.3", False, u"REWARD BENEFIT VISA (OS)",10),
+            ])
+        self.assertAllReconcileEqual([
+            (u"1970-01-01 10:00:00", u"$+22,671.98"),
+            (u"2012-01-31 00:00:00", u"$+22,671.48"),
+            (u"2012-02-01 00:00:00", u"$+22,671.78"),
+            (u"2012-02-01 00:00:00.000001", u"$+22,672.08"),
+            (u"2012-02-01 00:00:00.000002", u"$+22,672.23"),
+            (u"2012-02-01 00:00:00.000003", u"$+22,672.33"),
+            ])
 
     def test_running_missing(self):
-        importer = RunningExampleImporter()
+        importer = self.Importer()
 
         reconcile = models.Reconciliation.objects.all().order_by("id")[0]
         reconcile.amount = 2267198
@@ -508,17 +534,19 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_running))
-        self.assertAllTransEqual(
-            [(u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE"),
-             (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY"),
-             (u"2012-02-02 00:00:00.000000.0", False, u"REWARD BENEFIT VISA (LOCAL)"),
-             (u"2012-02-02 00:00:00.000000.1", False, u"REWARD BENEFIT VISA (OS)")])
-        self.assertAllReconcileEqual(
-            [(u"1970-01-01 10:00:00", u"$+22,671.98"),
-             (u"2012-01-31 00:00:00", u"$+22,671.48"),
-             (u"2012-02-01 00:00:00", u"$+22,671.78"),
-             (u"2012-02-02 00:00:00", u"$+22,671.93"),
-             (u"2012-02-02 00:00:00.000001", u"$+22,672.03")])
+        self.assertAllTransEqual([
+            (u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE",-50),
+            (u"2012-02-01 00:00:00.000000.0", False, u"REWARD BENEFIT BPAY",30),
+            (u"2012-02-02 00:00:00.000000.0", False, u"REWARD BENEFIT VISA (LOCAL)",15),
+            (u"2012-02-02 00:00:00.000000.1", False, u"REWARD BENEFIT VISA (OS)",10),
+            ])
+        self.assertAllReconcileEqual([
+            (u"1970-01-01 10:00:00", u"$+22,671.98"),
+            (u"2012-01-31 00:00:00", u"$+22,671.48"),
+            (u"2012-02-01 00:00:00", u"$+22,671.78"),
+            (u"2012-02-02 00:00:00", u"$+22,671.93"),
+            (u"2012-02-02 00:00:00.000001", u"$+22,672.03"),
+            ])
 
         csv_running_missing = SIO.StringIO("""\
 ,02/02/2012,REWARD BENEFIT VISA (OS),0.10,22671.73
@@ -527,23 +555,24 @@ class CSVTestCase(djangotest.TestCase):
 """)
         self.assertTrue(importer.parse_file(
             self.account, csv_running_missing))
-        self.assertAllTransEqual(
-            [(u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE"),
-             (u"2012-02-01 00:00:00.000000.0", True, u"REWARD BENEFIT BPAY"),
-             (u"2012-02-02 00:00:00.000000.0", True, u"REWARD BENEFIT VISA (LOCAL)"),
-             (u"2012-02-02 00:00:00.000000.1", True, u"REWARD BENEFIT VISA (OS)"),
-             (u"2012-02-02 00:00:00.000000.0", False, u"REWARD BENEFIT VISA (LOCAL)"),
-             (u"2012-02-02 00:00:00.000000.1", False, u"REWARD BENEFIT VISA (OS)")])
-        self.assertAllReconcileEqual(
-            [(u"1970-01-01 10:00:00", u"$+22,671.98"),
-             (u"2012-01-31 00:00:00", u"$+22,671.48"),
-             (u"2012-02-01 00:00:00", u"$+22,671.78"),
-             (u"2012-02-02 00:00:00", u"$+22,671.93"),
-             (u"2012-02-02 00:00:00.000001", u"$+22,672.03"),
-             (self.now().strftime(u'%Y-%m-%d %H:%M:%S'), u"$+22,671.48"),
-             (u"2012-02-02 00:00:00", u"$+22,671.63"),
-             (u"2012-02-02 00:00:00.000001", u"$+22,671.73"),
-             ])
+        self.assertAllTransEqual([
+            (u"2012-01-31 00:00:00.000000.0", False, u"NON REDIATM WITHDRAWAL FEE",-50),
+            (u"2012-02-01 00:00:00.000000.0", True, u"REWARD BENEFIT BPAY",30),
+            (u"2012-02-02 00:00:00.000000.0", True, u"REWARD BENEFIT VISA (LOCAL)",15),
+            (u"2012-02-02 00:00:00.000000.1", True, u"REWARD BENEFIT VISA (OS)",10),
+            (u"2012-02-02 00:00:00.000000.0", False, u"REWARD BENEFIT VISA (LOCAL)",15),
+            (u"2012-02-02 00:00:00.000000.1", False, u"REWARD BENEFIT VISA (OS)",10),
+            ])
+        self.assertAllReconcileEqual([
+            (u"1970-01-01 10:00:00", u"$+22,671.98"),
+            (u"2012-01-31 00:00:00", u"$+22,671.48"),
+            (u"2012-02-01 00:00:00", u"$+22,671.78"),
+            (u"2012-02-02 00:00:00", u"$+22,671.93"),
+            (u"2012-02-02 00:00:00.000001", u"$+22,672.03"),
+            (self.now().strftime(u'%Y-%m-%d %H:%M:%S'), u"$+22,671.48"),
+            (u"2012-02-02 00:00:00", u"$+22,671.63"),
+            (u"2012-02-02 00:00:00.000001", u"$+22,671.73"),
+            ])
 
 
     def not_yet_working(self):

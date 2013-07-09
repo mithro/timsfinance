@@ -81,8 +81,10 @@ class CategorizerAdmin(admin.ModelAdmin):
 
 for model_name in dir(finance_models):
     model = getattr(finance_models, model_name)
+
     if inspect.isclass(model) and issubclass(model, django_models.Model):
-       admin_interface = getattr(finance_models, model_name+'Admin', None)
+
+       admin_interface = locals().get(model_name+'Admin', None)
        if admin_interface:
           admin.site.register(model, admin_interface)
        else:

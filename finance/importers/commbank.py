@@ -238,3 +238,34 @@ class CommBankNetBank(Importer):
 
             transactions.append(trans)
         return transactions
+
+
+"""
+            # Commbank reports extra info in the description about any currency
+            # conversion that happened. Lets try and extract that info.
+            if len(extra_info) > 0:
+                split_on = None
+                # FIXME: These must mean smoething?
+                groups = re.search('##[0-9][0-9][0-9][0-9]', extra_info)
+                if groups:
+                    split_on = groups.group()
+
+                if split_on:
+                    location, currency_info = [x.strip() for x in extra_info.split(split_on)]
+
+                    # Get the location info
+                    trans.imported_location = location.strip()
+
+                    # Extract the currency info
+                    stuff = re.match("([0-9]*.[0-9][0-9]) (.*)", currency_info)
+                    if stuff:
+                        amount, currency_type = stuff.groups()
+                        amount = amount.replace('.', '')
+
+                        trans.imported_original_amount = int(amount)*(trans.imported_amount/abs(trans.imported_amount))
+                        trans.imported_original_currency = models.Currency.objects.get(pk=CURRENCY_MAP[currency_type])
+                else:
+                    trans.imported_location = extra_info + ', Australia'
+            else:
+                trans.imported_location = 'Australia'
+"""

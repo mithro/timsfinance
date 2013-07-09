@@ -164,6 +164,7 @@ Running total *excluding* the line being processed transaction.
         print "Using an order for the CSV file of:", options['fields']
         print
 
+        account = None
         try:
             account = models.Account.objects.get(account_id=options['account'])
         except Exception, e:
@@ -172,6 +173,8 @@ Running total *excluding* the line being processed transaction.
             account = models.Account.objects.get(short_id=options['account'])
         except Exception, e:
             print e
+        if account is None:
+            raise Exception("Could not find the account you specified.")
 
         importer = TemporaryImporter()
         try:

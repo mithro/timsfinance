@@ -3,25 +3,6 @@
 # -*- coding: utf-8 -*-
 # vim: set ts=4 sw=4 et sts=4 ai:
 
-"""
-Usage:
-
-If your CSV file looks like:
-  03/07/2013,"-2.02","INTNL TRANSACTION FEE",""
-  03/07/2013,"-67.19","PAYPAL *GELASKINS        4029357733  ON ##0713          60.80 US DOLLAR",""
-
-  python manage.py csvimport --account 1 --file data.csv \
-    --fields=DATE --fields=AMOUNT --fields=DESCRIPTION --fields=IGNORE
-
-If your CSV file looks like:
-  Effective Date,Entered Date,Transaction Description,Amount,Balance
-  01/07/2012,30/06/2012,CAPITALISATION ,-876.50,197705.32
-  ,30/06/2012,CAPITALISATION ,-8.00,196828.82
-
-  python manage.py csvimport --account 1 --file data.csv \
-    --fields=EFFECTIVE_DATE --fields=ENTERED_DATE --fields=DESCRIPTION \
-    --fields=AMOUNT --fields=RUNNING_TOTAL_INC
-"""
 
 import getpass
 import datetime
@@ -78,8 +59,24 @@ class SpecialHelpFormatter(optparse.IndentedHelpFormatter):
 
 class Command(BaseCommand):
     args = ''
-    help = 'Imports transactions from a hand downloaded CSV file.'
+    help = """Imports transactions from a hand downloaded CSV file.
 
+If your CSV file looks like:
+  03/07/2013,"-2.02","INTNL TRANSACTION FEE",""
+  03/07/2013,"-67.19","PAYPAL *GELASKINS        4029357733  ON ##0713          60.80 US DOLLAR",""
+
+  python manage.py csvimport --account 1 --filename data.csv \\
+    --fields=DATE --fields=AMOUNT --fields=DESCRIPTION --fields=IGNORE
+
+If your CSV file looks like:
+  Effective Date,Entered Date,Transaction Description,Amount,Balance
+  01/07/2012,30/06/2012,CAPITALISATION ,-876.50,197705.32
+  ,30/06/2012,CAPITALISATION ,-8.00,196828.82
+
+  python manage.py csvimport --account 1 --filename data.csv \\
+    --fields=EFFECTIVE_DATE --fields=ENTERED_DATE --fields=DESCRIPTION \\
+    --fields=AMOUNT --fields=RUNNING_TOTAL_INC
+"""
 
     def create_parser(self, prog_name, subcommand):
         """
@@ -87,6 +84,8 @@ class Command(BaseCommand):
         parse the arguments to this command.
 
         """
+
+
         return optparse.OptionParser(prog=prog_name,
                             usage=self.usage(subcommand),
                             version=self.get_version(),

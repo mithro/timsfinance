@@ -20,6 +20,9 @@ from finance.importers import csv_importer
 
 
 
+####################
+# FIXME: Move all the below into a common file used by all management commands.
+####################
 import textwrap
 class SpecialHelpFormatter(optparse.IndentedHelpFormatter):
     def format_option(self, option):
@@ -57,6 +60,8 @@ class SpecialHelpFormatter(optparse.IndentedHelpFormatter):
             result.append("\n")
         return "".join(result)
 
+####################
+
 class Command(BaseCommand):
     args = ''
     help = """Imports transactions from a hand downloaded CSV file.
@@ -65,7 +70,7 @@ If your CSV file looks like:
   03/07/2013,"-2.02","INTNL TRANSACTION FEE",""
   03/07/2013,"-67.19","PAYPAL *GELASKINS        4029357733  ON ##0713          60.80 US DOLLAR",""
 
-  python manage.py csvimport --account 1 --filename data.csv \\
+  python manage.py csvimport --account accountname --filename data.csv \\
     --fields=DATE --fields=AMOUNT --fields=DESCRIPTION --fields=IGNORE
 
 If your CSV file looks like:
@@ -73,7 +78,7 @@ If your CSV file looks like:
   01/07/2012,30/06/2012,CAPITALISATION ,-876.50,197705.32
   ,30/06/2012,CAPITALISATION ,-8.00,196828.82
 
-  python manage.py csvimport --account 1 --filename data.csv \\
+  python manage.py csvimport --account accountname --filename data.csv \\
     --fields=EFFECTIVE_DATE --fields=ENTERED_DATE --fields=DESCRIPTION \\
     --fields=AMOUNT --fields=RUNNING_TOTAL_INC
 """
@@ -147,8 +152,10 @@ Running total *excluding* the line being processed transaction.
         make_option(
             "--account",
             action="store", type="string", dest="account",
-            help="Account to load CSV file into."),
-    )
+            help=("Account to load CSV file into. Can either be the 'Account"
+                  " ID' (normally a number like 12321354) or the 'Account"
+                  " Short Name' what you set when creating the account.")),
+        )
 
     def handle(self, *args, **options):
 

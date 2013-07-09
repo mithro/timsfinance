@@ -34,7 +34,7 @@ class Command(BaseCommand):
         make_option(
             "--fields",
             action="append", dest="fields",
-            default=["DATE", "AMOUNT", "DESCRIPTION", "IGNORE"],
+            default=[],
             help=("Field types in the CSV file, should be in the right order.\n"
                   "DATE              - Date of the transaction. If you only get one date use this.\n"
 #                  "EFFECTIVE_DATE    - Effective date of the transaction (IE when it took affect).\n"
@@ -62,10 +62,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
+        if not options['fields']:
+            options['fields'] = ["AMOUNT", "DATE", "DESCRIPTION"]
+
         class TemporaryImporter(csv_importer.CSVImporter):
             FIELDS = [getattr(csv_importer.FieldList, field) for field in options['fields']]
             DATEFMT = options['datefmt']
             ORDER = [lambda x: x, reversed][options['order']]
+
+        print "Using an order for the CSV file of:", options['fields']
+        print
 
         try:
             account = models.Account.objects.get(account_id=options['account'])
